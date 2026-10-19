@@ -51,12 +51,16 @@ import net.minecraft.block.Blocks;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.block.FallingBlock;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ExperienceOrbEntity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.registry.tag.ItemTags;
@@ -86,40 +90,15 @@ import java.util.Random;
 import java.util.Set;
 
 public class SeedMiner extends Module {
-    private final SettingGroup sgSeed = settings.createGroup("Seed");
     private final SettingGroup sgTargets = settings.createGroup("Targets");
-    private final SettingGroup sgMining = settings.createGroup("Mining");
-    private final SettingGroup sgAutoTool = settings.createGroup("Auto Tool");
     private final SettingGroup sgSafety = settings.createGroup("Safety");
+    private final SettingGroup sgAutoTool = settings.createGroup("Auto Tool", false);
+    private final SettingGroup sgMining = settings.createGroup("Mining", false);
     private final SettingGroup sgAntiDetection = settings.createGroup("Anti-Detection", false);
     private final SettingGroup sgAutoCompress = settings.createGroup("Auto Compress", false);
-    private final SettingGroup sgRender = settings.createGroup("Render");
-
-    // Seed
-
-    private final Setting<SeedSource> seedSource = sgSeed.add(new EnumSetting.Builder<SeedSource>()
-        .name("seed-source")
-        .description("Where the world seed comes from. Auto: manual seed if set, otherwise SeedMapper (/sm:config Seed set, saved seeds, online database).")
-        .defaultValue(SeedSource.Auto)
-        .onChanged(v -> invalidate())
-        .build()
-    );
-
-    private final Setting<String> manualSeed = sgSeed.add(new StringSetting.Builder()
-        .name("manual-seed")
-        .description("World seed (number or text like in the world creation screen). Leave empty to use the seed from SeedMapper.")
-        .defaultValue("")
-        .onChanged(v -> invalidate())
-        .build()
-    );
-
-    private final Setting<Boolean> largeBiomes = sgSeed.add(new BoolSetting.Builder()
-        .name("large-biomes")
-        .description("Enable if the world was created with the Large Biomes preset.")
-        .defaultValue(false)
-        .onChanged(v -> invalidate())
-        .build()
-    );
+    private final SettingGroup sgRender = settings.createGroup("Render", false);
+    private final SettingGroup sgSeed = settings.createGroup("Seed", false);
+    private final SettingGroup sgAdvanced = settings.createGroup("Advanced", false);
 
     // Targets
 
@@ -129,24 +108,6 @@ public class SeedMiner extends Module {
         .defaultValue(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE, Blocks.ANCIENT_DEBRIS)
         .filter(OreKind::isSupported)
         .onChanged(v -> invalidate())
-        .build()
-    );
-
-    private final Setting<Boolean> oreVeins = sgTargets.add(new BoolSetting.Builder()
-        .name("ore-veins")
-        .description("Also predict large copper/iron ore veins (incl. raw ore blocks). Slower to scan.")
-        .defaultValue(false)
-        .onChanged(v -> invalidate())
-        .build()
-    );
-
-    private final Setting<Integer> chunkRadius = sgTargets.add(new IntSetting.Builder()
-        .name("chunk-radius")
-        .description("How many chunks around you are scanned.")
-        .defaultValue(4)
-        .range(0, 16)
-        .sliderRange(0, 12)
-        .onChanged(v -> lastScanCenter = null)
         .build()
     );
 
@@ -170,9 +131,17 @@ public class SeedMiner extends Module {
         .build()
     );
 
-    private final Setting<Boolean> followPlayer = sgTargets.add(new BoolSetting.Builder()
-        .name("follow-player")
-        .description("Keep scanning new chunks around you while you move.")
+    private final Setting<Boolean> oreVeins = sgTargets.add(new BoolSetting.Builder()
+        .name("ore-veins")
+        .description("Also predict large copper/iron ore veins (incl. raw ore blocks). Slower to scan.")
+        .defaultValue(false)
+        .onChanged(v -> invalidate())
+        .build()
+    );
+
+    private final Setting<Boolean> mineSeenOres = sgTargets.add(new BoolSetting.Builder()
+        .name("mine-seen-ores")
+        .description("Also mine ores of the selected types that are visible near you, even if the prediction missed them.")
         .defaultValue(true)
         .build()
     );
@@ -184,13 +153,6 @@ public class SeedMiner extends Module {
         .build()
     );
 
-    private final Setting<Boolean> mineSeenOres = sgTargets.add(new BoolSetting.Builder()
-        .name("mine-seen-ores")
-        .description("Also mine ores of the selected types that are visible near you, even if the prediction missed them.")
-        .defaultValue(true)
-        .build()
-    );
-
     private final Setting<VerifyMode> verifyMode = sgTargets.add(new EnumSetting.Builder<VerifyMode>()
         .name("verify")
         .description("Check predictions against loaded chunks. SkipAir: drop positions that are air (caves, already mined). Exact: also drop positions that are not the ore (with server-anti-xray only for blocks that touch air).")
@@ -198,166 +160,7 @@ public class SeedMiner extends Module {
         .build()
     );
 
-    // Mining
-
-    private final Setting<Boolean> autoMine = sgMining.add(new BoolSetting.Builder()
-        .name("auto-mine")
-        .description("Let Baritone walk to and mine the predicted ores. Disable to only highlight them.")
-        .defaultValue(true)
-        .build()
-    );
-
-    private final Setting<Integer> maxDistance = sgMining.add(new IntSetting.Builder()
-        .name("max-distance")
-        .description("Ignore ores that are further away than this horizontally (blocks).")
-        .defaultValue(96)
-        .range(8, 512)
-        .sliderRange(16, 256)
-        .build()
-    );
-
-    private final Setting<Double> verticalCost = sgMining.add(new DoubleSetting.Builder()
-        .name("vertical-cost")
-        .description("How much height differences count when choosing the next ore. 1 = plain 3D distance, higher values prefer ores on your level.")
-        .defaultValue(1.5)
-        .range(0, 10)
-        .sliderRange(0, 5)
-        .build()
-    );
-
-    private final Setting<Double> veinPriority = sgMining.add(new DoubleSetting.Builder()
-        .name("vein-priority")
-        .description("How much groups of ores are preferred over single ores. 0 = always the nearest ore, 0.5 = a group of 4 may be twice as far away, 1 = the group with the least walking per ore.")
-        .defaultValue(0.5)
-        .range(0, 3)
-        .sliderRange(0, 2)
-        .build()
-    );
-
-    private final Setting<Integer> targetTimeout = sgMining.add(new IntSetting.Builder()
-        .name("target-timeout")
-        .description("Skip an ore if you get no closer to it for this many seconds.")
-        .defaultValue(60)
-        .range(5, 600)
-        .sliderRange(10, 300)
-        .build()
-    );
-
-    private final Setting<Integer> retries = sgMining.add(new IntSetting.Builder()
-        .name("path-retries")
-        .description("How often to retry an ore when Baritone gives up on the path without getting closer.")
-        .defaultValue(2)
-        .range(0, 10)
-        .sliderRange(0, 5)
-        .build()
-    );
-
-    private final Setting<Boolean> collectDrops = sgMining.add(new BoolSetting.Builder()
-        .name("collect-drops")
-        .description("Walk to the drops of mined ores before moving on, so none are left behind.")
-        .defaultValue(true)
-        .build()
-    );
-
-    private final Setting<Integer> collectRadius = sgMining.add(new IntSetting.Builder()
-        .name("collect-radius")
-        .description("How far away (blocks) drops are collected.")
-        .defaultValue(6)
-        .range(1, 16)
-        .sliderRange(2, 12)
-        .visible(collectDrops::get)
-        .build()
-    );
-
-    private final Setting<Integer> collectTimeout = sgMining.add(new IntSetting.Builder()
-        .name("collect-timeout")
-        .description("Give up on a drop after this many seconds.")
-        .defaultValue(8)
-        .range(1, 60)
-        .sliderRange(2, 20)
-        .visible(collectDrops::get)
-        .build()
-    );
-
-    private final Setting<Boolean> configureBaritone = sgMining.add(new BoolSetting.Builder()
-        .name("configure-baritone")
-        .description("Sets Baritone's allowBreak to true while active (required) and the options below. Restored when disabled.")
-        .defaultValue(true)
-        .onChanged(v -> applyBaritoneSettings())
-        .build()
-    );
-
-    private final Setting<Boolean> allowPlace = sgMining.add(new BoolSetting.Builder()
-        .name("allow-place")
-        .description("Allow Baritone to place blocks (bridging, pillaring, blocking lava).")
-        .defaultValue(true)
-        .visible(configureBaritone::get)
-        .onChanged(v -> applyBaritoneSettings())
-        .build()
-    );
-
-    private final Setting<Boolean> allowParkour = sgMining.add(new BoolSetting.Builder()
-        .name("allow-parkour")
-        .description("Allow Baritone to jump over gaps.")
-        .defaultValue(false)
-        .visible(configureBaritone::get)
-        .onChanged(v -> applyBaritoneSettings())
-        .build()
-    );
-
-    private final Setting<Boolean> disableWhenDone = sgMining.add(new BoolSetting.Builder()
-        .name("disable-when-done")
-        .description("Disable the module when no ores are left. Otherwise it waits for new chunks.")
-        .defaultValue(false)
-        .build()
-    );
-
-    // Auto Tool
-
-    private final Setting<Boolean> autoTool = sgAutoTool.add(new BoolSetting.Builder()
-        .name("auto-tool")
-        .description("Select the tool for every block Baritone breaks instead of letting Baritone do it. Tools must be in the hotbar.")
-        .defaultValue(true)
-        .onChanged(v -> applyBaritoneSettings())
-        .build()
-    );
-
-    private final Setting<Boolean> fortuneOnlyOnOres = sgAutoTool.add(new BoolSetting.Builder()
-        .name("fortune-only-on-ores")
-        .description("Use fortune pickaxes only on ores and a pickaxe without fortune for everything else, so the fortune pickaxe lasts longer.")
-        .defaultValue(true)
-        .visible(autoTool::get)
-        .build()
-    );
-
-    private final Setting<Boolean> fortuneFallback = sgAutoTool.add(new BoolSetting.Builder()
-        .name("fortune-fallback")
-        .description("If there is no other pickaxe, use the fortune pickaxe for other blocks too. Otherwise the module stops.")
-        .defaultValue(false)
-        .visible(() -> autoTool.get() && fortuneOnlyOnOres.get())
-        .build()
-    );
-
-    private final Setting<Integer> minToolDurability = sgAutoTool.add(new IntSetting.Builder()
-        .name("min-durability")
-        .description("Don't use tools with less durability left than this (percent), so they don't break.")
-        .defaultValue(5)
-        .range(0, 50)
-        .sliderRange(0, 25)
-        .visible(autoTool::get)
-        .build()
-    );
-
     // Safety
-
-    private final Setting<Integer> minHealth = sgSafety.add(new IntSetting.Builder()
-        .name("min-health")
-        .description("Stop and disable when your health (incl. absorption) drops to this value. 0 = off.")
-        .defaultValue(8)
-        .range(0, 36)
-        .sliderRange(0, 20)
-        .build()
-    );
 
     private final Setting<Boolean> stopWhenFull = sgSafety.add(new BoolSetting.Builder()
         .name("stop-when-full")
@@ -391,10 +194,27 @@ public class SeedMiner extends Module {
         .build()
     );
 
+    private final Setting<Integer> minHealth = sgSafety.add(new IntSetting.Builder()
+        .name("min-health")
+        .description("Stop and disable when your health (incl. absorption) drops to this value. 0 = off.")
+        .defaultValue(8)
+        .range(0, 36)
+        .sliderRange(0, 20)
+        .build()
+    );
+
     private final Setting<Boolean> requirePickaxe = sgSafety.add(new BoolSetting.Builder()
         .name("require-pickaxe")
-        .description("Disable when there is no pickaxe in your hotbar.")
+        .description("Disable when there is no usable pickaxe in your hotbar: none at all, or all of them worn down to min-durability.")
         .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> leaveWhenNoPickaxe = sgSafety.add(new BoolSetting.Builder()
+        .name("leave-when-no-pickaxe")
+        .description("Also leave the server then.")
+        .defaultValue(false)
+        .visible(requirePickaxe::get)
         .build()
     );
 
@@ -412,6 +232,157 @@ public class SeedMiner extends Module {
         .range(4, 256)
         .sliderRange(8, 128)
         .visible(pauseNearPlayers::get)
+        .build()
+    );
+
+    // Auto Tool
+
+    private final Setting<Boolean> autoTool = sgAutoTool.add(new BoolSetting.Builder()
+        .name("auto-tool")
+        .description("Select the tool for every block Baritone breaks instead of letting Baritone do it. Tools must be in the hotbar.")
+        .defaultValue(true)
+        .onChanged(v -> applyBaritoneSettings())
+        .build()
+    );
+
+    private final Setting<Boolean> fortuneOnlyOnOres = sgAutoTool.add(new BoolSetting.Builder()
+        .name("fortune-only-on-ores")
+        .description("Use fortune pickaxes only on ores and a pickaxe without fortune for everything else, so the fortune pickaxe lasts longer.")
+        .defaultValue(true)
+        .visible(autoTool::get)
+        .build()
+    );
+
+    private final Setting<Boolean> fortuneFallback = sgAutoTool.add(new BoolSetting.Builder()
+        .name("fortune-fallback")
+        .description("If there is no other pickaxe, use the fortune pickaxe for other blocks too. Otherwise the module stops.")
+        .defaultValue(false)
+        .visible(() -> autoTool.get() && fortuneOnlyOnOres.get())
+        .build()
+    );
+
+    private final Setting<Integer> minToolDurability = sgAutoTool.add(new IntSetting.Builder()
+        .name("min-durability")
+        .description("Never use a tool with less durability left than this (percent), so it never breaks. Without a usable pickaxe the module stops (see require-pickaxe in Safety).")
+        .defaultValue(5)
+        .range(0, 50)
+        .sliderRange(0, 25)
+        .build()
+    );
+
+    private final Setting<Boolean> repairWithMending = sgAutoTool.add(new BoolSetting.Builder()
+        .name("repair-with-mending")
+        .description("When a pickaxe with Mending wears down below repair-below, ores nearby that give experience (nether quartz, coal, lapis, redstone, diamond, emerald) are mined first, with that pickaxe in hand, until it is back at repair-until. Ancient debris gives no experience, so mining it never repairs anything.")
+        .defaultValue(true)
+        .visible(autoTool::get)
+        .build()
+    );
+
+    private final Setting<Integer> repairBelow = sgAutoTool.add(new IntSetting.Builder()
+        .name("repair-below")
+        .description("Start repairing when the pickaxe has less durability left than this (percent).")
+        .defaultValue(20)
+        .range(1, 95)
+        .sliderRange(5, 50)
+        .visible(() -> autoTool.get() && repairWithMending.get())
+        .build()
+    );
+
+    private final Setting<Integer> repairUntil = sgAutoTool.add(new IntSetting.Builder()
+        .name("repair-until")
+        .description("Repair until the pickaxe has this much durability left (percent), then go back to mining.")
+        .defaultValue(60)
+        .range(5, 100)
+        .sliderRange(20, 100)
+        .visible(() -> autoTool.get() && repairWithMending.get())
+        .build()
+    );
+
+    // Mining
+
+    private final Setting<Boolean> autoMine = sgMining.add(new BoolSetting.Builder()
+        .name("auto-mine")
+        .description("Let Baritone walk to and mine the predicted ores. Disable to only highlight them.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> collectDrops = sgMining.add(new BoolSetting.Builder()
+        .name("collect-drops")
+        .description("Walk to the drops of mined ores before moving on, so none are left behind.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Integer> collectRadius = sgMining.add(new IntSetting.Builder()
+        .name("collect-radius")
+        .description("How far away (blocks) drops are collected.")
+        .defaultValue(6)
+        .range(1, 16)
+        .sliderRange(2, 12)
+        .visible(collectDrops::get)
+        .build()
+    );
+
+    private final Setting<Integer> collectTimeout = sgMining.add(new IntSetting.Builder()
+        .name("collect-timeout")
+        .description("Give up on a drop after this many seconds.")
+        .defaultValue(8)
+        .range(1, 60)
+        .sliderRange(2, 20)
+        .visible(collectDrops::get)
+        .build()
+    );
+
+    private final Setting<Double> veinPriority = sgMining.add(new DoubleSetting.Builder()
+        .name("vein-priority")
+        .description("How much groups of ores are preferred over single ores. 0 = always the nearest ore, 0.5 = a group of 4 may be twice as far away, 1 = the group with the least walking per ore.")
+        .defaultValue(0.5)
+        .range(0, 3)
+        .sliderRange(0, 2)
+        .build()
+    );
+
+    private final Setting<Double> verticalCost = sgMining.add(new DoubleSetting.Builder()
+        .name("vertical-cost")
+        .description("How much height differences count when choosing the next ore. 1 = plain 3D distance, higher values prefer ores on your level.")
+        .defaultValue(1.5)
+        .range(0, 10)
+        .sliderRange(0, 5)
+        .build()
+    );
+
+    private final Setting<Integer> maxDistance = sgMining.add(new IntSetting.Builder()
+        .name("max-distance")
+        .description("Ignore ores that are further away than this horizontally (blocks).")
+        .defaultValue(96)
+        .range(8, 512)
+        .sliderRange(16, 256)
+        .build()
+    );
+
+    private final Setting<Integer> targetTimeout = sgMining.add(new IntSetting.Builder()
+        .name("target-timeout")
+        .description("Skip an ore if you get no closer to it for this many seconds.")
+        .defaultValue(60)
+        .range(5, 600)
+        .sliderRange(10, 300)
+        .build()
+    );
+
+    private final Setting<Integer> retries = sgMining.add(new IntSetting.Builder()
+        .name("path-retries")
+        .description("How often to retry an ore when Baritone gives up on the path without getting closer.")
+        .defaultValue(2)
+        .range(0, 10)
+        .sliderRange(0, 5)
+        .build()
+    );
+
+    private final Setting<Boolean> disableWhenDone = sgMining.add(new BoolSetting.Builder()
+        .name("disable-when-done")
+        .description("Disable the module when no ores are left. Otherwise it waits for new chunks.")
+        .defaultValue(false)
         .build()
     );
 
@@ -518,14 +489,6 @@ public class SeedMiner extends Module {
         .build()
     );
 
-    private final Setting<Boolean> showCraftingGui = sgAutoCompress.add(new BoolSetting.Builder()
-        .name("show-crafting-gui")
-        .description("Show the crafting window while crafting. Off (silent): the window is not drawn, but it is really opened, clicked and closed like a player does.")
-        .defaultValue(false)
-        .visible(autoCompress::get)
-        .build()
-    );
-
     private final Setting<Boolean> dropJunk = sgAutoCompress.add(new BoolSetting.Builder()
         .name("drop-junk")
         .description("Before crafting, throw out junk (stone, deepslate, gravel, ...) until there is room, keeping one stack of building blocks for Baritone. Otherwise junk lying around is picked up into the freed slots and the crafting table doesn't fit back in. Off: only craft when no junk lies next to you.")
@@ -544,6 +507,14 @@ public class SeedMiner extends Module {
             Items.END_STONE
         )
         .visible(() -> autoCompress.get() && dropJunk.get())
+        .build()
+    );
+
+    private final Setting<Boolean> showCraftingGui = sgAutoCompress.add(new BoolSetting.Builder()
+        .name("show-crafting-gui")
+        .description("Show the crafting window while crafting. Off (silent): the window is not drawn, but it is really opened, clicked and closed like a player does.")
+        .defaultValue(false)
+        .visible(autoCompress::get)
         .build()
     );
 
@@ -626,6 +597,77 @@ public class SeedMiner extends Module {
         .build()
     );
 
+    // Seed
+
+    private final Setting<SeedSource> seedSource = sgSeed.add(new EnumSetting.Builder<SeedSource>()
+        .name("seed-source")
+        .description("Where the world seed comes from. Auto: manual seed if set, otherwise SeedMapper (/sm:config Seed set, saved seeds, online database).")
+        .defaultValue(SeedSource.Auto)
+        .onChanged(v -> invalidate())
+        .build()
+    );
+
+    private final Setting<String> manualSeed = sgSeed.add(new StringSetting.Builder()
+        .name("manual-seed")
+        .description("World seed (number or text like in the world creation screen). Leave empty to use the seed from SeedMapper.")
+        .defaultValue("")
+        .onChanged(v -> invalidate())
+        .build()
+    );
+
+    private final Setting<Boolean> largeBiomes = sgSeed.add(new BoolSetting.Builder()
+        .name("large-biomes")
+        .description("Enable if the world was created with the Large Biomes preset.")
+        .defaultValue(false)
+        .onChanged(v -> invalidate())
+        .build()
+    );
+
+    // Advanced
+
+    private final Setting<Integer> chunkRadius = sgAdvanced.add(new IntSetting.Builder()
+        .name("chunk-radius")
+        .description("How many chunks around you are scanned.")
+        .defaultValue(4)
+        .range(0, 16)
+        .sliderRange(0, 12)
+        .onChanged(v -> lastScanCenter = null)
+        .build()
+    );
+
+    private final Setting<Boolean> followPlayer = sgAdvanced.add(new BoolSetting.Builder()
+        .name("follow-player")
+        .description("Keep scanning new chunks around you while you move.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private final Setting<Boolean> configureBaritone = sgAdvanced.add(new BoolSetting.Builder()
+        .name("configure-baritone")
+        .description("Sets Baritone's allowBreak to true while active (required) and the options below. Restored when disabled.")
+        .defaultValue(true)
+        .onChanged(v -> applyBaritoneSettings())
+        .build()
+    );
+
+    private final Setting<Boolean> allowPlace = sgAdvanced.add(new BoolSetting.Builder()
+        .name("allow-place")
+        .description("Allow Baritone to place blocks (bridging, pillaring, blocking lava).")
+        .defaultValue(true)
+        .visible(configureBaritone::get)
+        .onChanged(v -> applyBaritoneSettings())
+        .build()
+    );
+
+    private final Setting<Boolean> allowParkour = sgAdvanced.add(new BoolSetting.Builder()
+        .name("allow-parkour")
+        .description("Allow Baritone to jump over gaps.")
+        .defaultValue(false)
+        .visible(configureBaritone::get)
+        .onChanged(v -> applyBaritoneSettings())
+        .build()
+    );
+
     private final OreScanner scanner = new OreScanner();
     private final Map<BlockPos, PredictedOre> ores = new HashMap<>();
     /** Positions that were mined, skipped or found invalid. Kept until the seed/world changes. */
@@ -672,11 +714,17 @@ public class SeedMiner extends Module {
     private boolean targetDonePending;
 
     /** Set from the block break event, the module is stopped on the next tick (not in the middle of Baritone's tick). */
-    private String autoToolStop;
+    private String toolStop;
     private boolean warnedNoSeed;
     private String status = "Idle";
     private Compressor compressor;
     private boolean wasEating;
+
+    // Mending repair state
+    /** Hotbar slot of the Mending pickaxe that is being repaired, -1 while none needs it. */
+    private int repairSlot = -1;
+    private final Map<BlockPos, PredictedOre> xpOres = new HashMap<>();
+    private int xpScanTimer;
     /** When the module was enabled, for the time limit. */
     private long startedAt;
 
@@ -696,7 +744,9 @@ public class SeedMiner extends Module {
         applyBaritoneSettings();
 
         warnedNoSeed = false;
-        autoToolStop = null;
+        toolStop = null;
+        repairSlot = -1;
+        xpOres.clear();
         lastScanCenter = null;
         pauseUntil = 0;
         ignoredDrops.clear();
@@ -735,10 +785,10 @@ public class SeedMiner extends Module {
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.world == null) return;
 
-        if (autoToolStop != null) {
-            error(autoToolStop);
-            autoToolStop = null;
-            toggle();
+        if (toolStop != null) {
+            String reason = toolStop;
+            toolStop = null;
+            stop(reason, requirePickaxe.get() && leaveWhenNoPickaxe.get());
             return;
         }
 
@@ -789,6 +839,7 @@ public class SeedMiner extends Module {
 
         if (!safetyCheck()) return;
 
+        updateRepair();
         mine();
     }
 
@@ -798,31 +849,49 @@ public class SeedMiner extends Module {
         return mc.player.isUsingItem() && mc.player.getActiveItem().contains(DataComponentTypes.FOOD);
     }
 
-    /** Picks the tool right before a block starts breaking, for Baritone and also for blocks you break yourself. */
+    /**
+     * Picks the tool right before a block starts breaking, for Baritone and also for blocks you break yourself, and
+     * makes sure no tool breaks.
+     */
     @EventHandler
     private void onStartBreaking(StartBreakingBlockEvent event) {
         // Breaking while eating would switch away from the food
-        if (isEating()) {
+        if (isEating() || toolStop != null) {
             event.cancel();
             return;
         }
-        if (!autoTool.get() || autoToolStop != null) return;
 
         BlockState state = mc.world.getBlockState(event.blockPos);
         if (state.isAir() || state.getHardness(mc.world, event.blockPos) == 0) return;
 
-        OreKind kind = OreKind.of(state.getBlock());
-        boolean ore = kind != null && kind.fortuneAffects();
-
-        int slot = ToolSelector.select(mc.player.getInventory(), state, ore, fortuneOnlyOnOres.get(), fortuneFallback.get(), minToolDurability.get());
-        if (slot == ToolSelector.ONLY_FORTUNE) {
-            event.cancel();
-            autoToolStop = "Only a fortune pickaxe can mine " + state.getBlock().getName().getString()
-                + ". Put another pickaxe in your hotbar or enable fortune-fallback. Stopping.";
-            return;
+        if (autoTool.get()) {
+            int slot = selectTool(state);
+            if (slot == ToolSelector.ONLY_FORTUNE) {
+                event.cancel();
+                toolStop = "Only a fortune pickaxe can mine " + state.getBlock().getName().getString()
+                    + " (put another pickaxe in your hotbar or enable fortune-fallback)";
+                return;
+            }
+            if (slot >= 0 && slot != mc.player.getInventory().getSelectedSlot()) InvUtils.swap(slot, false);
         }
 
-        if (slot >= 0 && slot != mc.player.getInventory().getSelectedSlot()) InvUtils.swap(slot, false);
+        // Whatever is in hand now (picked here, by Baritone or by you) must not break
+        ItemStack held = mc.player.getMainHandStack();
+        if (ToolSelector.isWorn(held, minToolDurability.get())) {
+            event.cancel();
+            toolStop = held.getName().getString() + " is worn down to " + ToolSelector.durability(held) + "% (min-durability " + minToolDurability.get() + "%)";
+        }
+    }
+
+    private int selectTool(BlockState state) {
+        OreKind kind = OreKind.of(state.getBlock());
+
+        // While repairing, the Mending pickaxe mines the ores that give experience, and everything else while experience
+        // orbs are around: they only repair what is in your hand (or worn) when they reach you
+        if (repairSlot != -1 && ((kind != null && kind.experience() >= 1) || xpOrbsNearby())) return repairSlot;
+
+        boolean ore = kind != null && kind.fortuneAffects();
+        return ToolSelector.select(mc.player.getInventory(), state, ore, fortuneOnlyOnOres.get(), fortuneFallback.get(), minToolDurability.get());
     }
 
     /**
@@ -1036,9 +1105,9 @@ public class SeedMiner extends Module {
             return false;
         }
 
-        if (requirePickaxe.get() && !hasPickaxe()) {
-            error("No pickaxe in your hotbar, stopping.");
-            toggle();
+        if (requirePickaxe.get() && !hasPickaxe(true)) {
+            String reason = hasPickaxe(false) ? "All pickaxes in your hotbar are worn down to min-durability (" + minToolDurability.get() + "%)" : "No pickaxe in your hotbar";
+            stop(reason, leaveWhenNoPickaxe.get());
             return false;
         }
 
@@ -1083,7 +1152,8 @@ public class SeedMiner extends Module {
                 // Only an ore that was really there counts as mined. Otherwise the prediction was wrong
                 // (stone, cave, already mined), even if Baritone had to break the block to get there.
                 if (gone && seenOre.contains(pos)) {
-                    countMined();
+                    // Ores mined only for their experience don't count
+                    if (selectedKinds.contains(target.kind())) countMined();
                     dropWaitTicks = DROP_WAIT_TICKS;
                 }
                 else invalid++;
@@ -1120,10 +1190,14 @@ public class SeedMiner extends Module {
                 // Ask again after a moment (1 s, 2 s, ...)
                 else if (++retryWaitTicks >= 20 * (targetRetries + 1)) {
                     retryWaitTicks = 0;
-                    if (targetRetries++ < retries.get()) baritone.mine(pos);
+                    // An ore mined only for its experience is given up right away, there are plenty of others
+                    boolean xpOnly = !selectedKinds.contains(target.kind());
+                    if (!xpOnly && targetRetries++ < retries.get()) baritone.mine(pos);
                     else {
-                        warning("Baritone could not reach ore at %s, skipping.", pos.toShortString());
-                        skipped++;
+                        if (!xpOnly) {
+                            warning("Baritone could not reach ore at %s, skipping.", pos.toShortString());
+                            skipped++;
+                        }
                         finishTarget();
                     }
                 }
@@ -1182,7 +1256,10 @@ public class SeedMiner extends Module {
                 return;
             }
 
-            target = nextTarget();
+            // While repairing, ores that give experience come first
+            target = repairSlot != -1 ? nextXpOre() : null;
+            if (target != null) seenOre.add(target.pos());
+            else target = nextTarget();
 
             if (target == null) {
                 baritone.stop();
@@ -1202,7 +1279,7 @@ public class SeedMiner extends Module {
             baritone.mine(target.pos());
         }
 
-        status = "Mining " + target.kind().name().toLowerCase().replace('_', ' ') + " at " + target.pos().toShortString()
+        status = (repairSlot == -1 ? "" : repairInfo() + ": ") + "Mining " + target.kind().name().toLowerCase().replace('_', ' ') + " at " + target.pos().toShortString()
             + (directHit == null ? "" : directHit.getBlockPos().equals(target.pos()) ? " (in reach)" : " (uncovering)");
     }
 
@@ -1409,6 +1486,107 @@ public class SeedMiner extends Module {
         return "Last minute: " + minedTimes.size() + (limit > 0 ? "/" + limit : "") + " ores";
     }
 
+    // Mending repair
+
+    /** Radius (blocks) around the player in which ores that give experience are mined while repairing. */
+    private static final int XP_ORE_RADIUS = 16;
+
+    /**
+     * Starts repairing a Mending pickaxe that wore down below repair-below and ends once it is back at repair-until.
+     * Meanwhile, ores near you that give experience are mined first, with that pickaxe in hand.
+     */
+    private void updateRepair() {
+        int slot = pickaxeToRepair();
+        if (slot != repairSlot) {
+            if (slot != -1) {
+                ItemStack pickaxe = mc.player.getInventory().getStack(slot);
+                info("%s is worn down to %d%%, repairing it with Mending: ores nearby that give experience come first.", pickaxe.getName().getString(), ToolSelector.durability(pickaxe));
+            }
+            else {
+                ItemStack pickaxe = mc.player.getInventory().getStack(repairSlot);
+                if (ToolSelector.durability(pickaxe) >= repairUntil.get()) info("%s is repaired (%d%%).", pickaxe.getName().getString(), ToolSelector.durability(pickaxe));
+            }
+            repairSlot = slot;
+            xpOres.clear();
+            xpScanTimer = 20;
+        }
+        if (repairSlot == -1) return;
+
+        if (++xpScanTimer >= 20) {
+            xpScanTimer = 0;
+            scanXpOres();
+        }
+
+        // Leave a target that gives no experience (e.g. ancient debris) as soon as one that does is in sight
+        if (target != null && target.kind().experience() < 1 && !xpOres.isEmpty()) clearTarget();
+    }
+
+    /** Hotbar slot of the Mending pickaxe to repair, or -1. Once started, it is repaired up to repair-until. */
+    private int pickaxeToRepair() {
+        if (!repairWithMending.get() || !autoTool.get()) return -1;
+
+        PlayerInventory inventory = mc.player.getInventory();
+        if (repairSlot != -1 && needsRepair(inventory.getStack(repairSlot), Math.max(repairUntil.get(), repairBelow.get()))) return repairSlot;
+        for (int slot = 0; slot < 9; slot++) {
+            if (needsRepair(inventory.getStack(slot), repairBelow.get())) return slot;
+        }
+        return -1;
+    }
+
+    /** A pickaxe Mending can repair with less durability left than below (percent), but not yet worn down to min-durability. */
+    private boolean needsRepair(ItemStack stack, int below) {
+        return stack.isIn(ItemTags.PICKAXES) && ToolSelector.canMend(stack) && ToolSelector.durability(stack) < below
+            && !ToolSelector.isWorn(stack, minToolDurability.get());
+    }
+
+    /**
+     * Collects the ores near you that give experience and that the pickaxe can mine. With server-anti-xray only the
+     * ones you can see, hidden ones may be fake. Ores next to water or lava are left alone, there are enough others
+     * (in the Nether, quartz next to the lava sea is often out of reach).
+     */
+    private void scanXpOres() {
+        xpOres.clear();
+        ItemStack pickaxe = mc.player.getInventory().getStack(repairSlot);
+
+        BlockPos center = mc.player.getBlockPos();
+        for (BlockPos pos : BlockPos.iterate(center.add(-XP_ORE_RADIUS, -XP_ORE_RADIUS, -XP_ORE_RADIUS), center.add(XP_ORE_RADIUS, XP_ORE_RADIUS, XP_ORE_RADIUS))) {
+            BlockState state = mc.world.getBlockState(pos);
+            OreKind kind = OreKind.of(state.getBlock());
+            if (kind == null || kind.experience() < 1 || finished.contains(pos) || !pickaxe.isSuitableFor(state) || !isTrusted(pos) || touchesFluid(pos)) continue;
+
+            BlockPos immutable = pos.toImmutable();
+            xpOres.put(immutable, ores.getOrDefault(immutable, new PredictedOre(immutable, kind)));
+        }
+    }
+
+    /** The ore that gives the most experience for the way there. */
+    private PredictedOre nextXpOre() {
+        PredictedOre best = null;
+        double bestCost = Double.MAX_VALUE;
+
+        for (PredictedOre ore : xpOres.values()) {
+            BlockPos pos = ore.pos();
+            double dx = pos.getX() + 0.5 - mc.player.getX(), dy = (pos.getY() - mc.player.getY()) * verticalCost.get(), dz = pos.getZ() + 0.5 - mc.player.getZ();
+            double cost = Math.sqrt(dx * dx + dy * dy + dz * dz) / ore.kind().experience();
+            if (cost < bestCost) {
+                bestCost = cost;
+                best = ore;
+            }
+        }
+
+        return best;
+    }
+
+    /** Experience orbs fly to you from up to 8 blocks away. */
+    private boolean xpOrbsNearby() {
+        return !mc.world.getEntitiesByClass(ExperienceOrbEntity.class, mc.player.getBoundingBox().expand(8), orb -> true).isEmpty();
+    }
+
+    private String repairInfo() {
+        int durability = ToolSelector.durability(mc.player.getInventory().getStack(repairSlot));
+        return "Repairing pickaxe (" + durability + "% -> " + Math.max(repairUntil.get(), repairBelow.get()) + "%)";
+    }
+
     // Breaking ores in reach
 
     /** Returns where a ray from the eyes first hits the block, if it is in reach and not hidden behind other blocks. */
@@ -1584,6 +1762,7 @@ public class SeedMiner extends Module {
     private void finishTarget() {
         if (target != null) {
             ores.remove(target.pos());
+            xpOres.remove(target.pos());
             seenOre.remove(target.pos());
             finished.add(target.pos());
         }
@@ -1614,12 +1793,16 @@ public class SeedMiner extends Module {
         return true;
     }
 
-    private boolean hasPickaxe() {
+    /** A pickaxe in the hotbar or offhand. Usable: one that isn't worn down to min-durability. */
+    private boolean hasPickaxe(boolean usable) {
         for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.player.getInventory().getStack(i);
-            if (stack.isIn(ItemTags.PICKAXES)) return true;
+            if (isPickaxe(mc.player.getInventory().getStack(i), usable)) return true;
         }
-        return mc.player.getOffHandStack().isIn(ItemTags.PICKAXES);
+        return isPickaxe(mc.player.getOffHandStack(), usable);
+    }
+
+    private boolean isPickaxe(ItemStack stack, boolean usable) {
+        return stack.isIn(ItemTags.PICKAXES) && !(usable && ToolSelector.isWorn(stack, minToolDurability.get()));
     }
 
     private boolean isPlayerNearby() {
@@ -1664,6 +1847,56 @@ public class SeedMiner extends Module {
                 event.renderer.line(RenderUtils.center.x, RenderUtils.center.y, RenderUtils.center.z, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, targetColor.get());
             }
         }
+    }
+
+    // Saved settings
+
+    /** Version of the settings layout, saved with the module. 2 = groups as since build 34. */
+    private static final int SETTINGS_LAYOUT = 2;
+
+    @Override
+    public NbtCompound toTag() {
+        NbtCompound tag = super.toTag();
+        if (tag != null) tag.putInt("layout", SETTINGS_LAYOUT);
+        return tag;
+    }
+
+    @Override
+    public Module fromTag(NbtCompound tag) {
+        if (tag.getInt("layout", 1) < SETTINGS_LAYOUT) migrateLayout(tag);
+        return super.fromTag(tag);
+    }
+
+    /**
+     * Build 34 moved settings into other groups. Meteor restores a setting only from the group it is in now, so
+     * saved values are sorted into their new groups before loading. The groups also start collapsed once, except
+     * Targets and Safety.
+     */
+    private void migrateLayout(NbtCompound tag) {
+        Map<String, NbtList> saved = new HashMap<>();
+        for (NbtElement oldGroup : tag.getCompoundOrEmpty("settings").getListOrEmpty("groups")) {
+            if (!(oldGroup instanceof NbtCompound oldGroupTag)) continue;
+            for (NbtElement setting : oldGroupTag.getListOrEmpty("settings")) {
+                if (!(setting instanceof NbtCompound settingTag)) continue;
+                String name = settingTag.getString("name", "");
+                for (SettingGroup group : settings) {
+                    if (group.get(name) != null) saved.computeIfAbsent(group.name, n -> new NbtList()).add(settingTag);
+                }
+            }
+        }
+
+        NbtList groups = new NbtList();
+        for (SettingGroup group : settings) {
+            NbtCompound groupTag = new NbtCompound();
+            groupTag.putString("name", group.name);
+            groupTag.putBoolean("sectionExpanded", group == sgTargets || group == sgSafety);
+            groupTag.put("settings", saved.getOrDefault(group.name, new NbtList()));
+            groups.add(groupTag);
+        }
+
+        NbtCompound settingsTag = new NbtCompound();
+        settingsTag.put("groups", groups);
+        tag.put("settings", settingsTag);
     }
 
     // GUI

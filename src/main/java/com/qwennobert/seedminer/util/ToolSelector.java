@@ -72,10 +72,22 @@ public final class ToolSelector {
         return level(stack, Enchantments.FORTUNE) > 0;
     }
 
-    private static boolean isWorn(ItemStack stack, int minDurability) {
+    /** Mending repairs it from the experience of mined ores, silk touch would make them drop none. */
+    public static boolean canMend(ItemStack stack) {
+        return stack.isDamageable() && level(stack, Enchantments.MENDING) > 0 && level(stack, Enchantments.SILK_TOUCH) == 0;
+    }
+
+    /** The tool has less durability left than minDurability (percent) and must not be used anymore. */
+    public static boolean isWorn(ItemStack stack, int minDurability) {
         if (!stack.isDamageable() || minDurability <= 0) return false;
         int left = stack.getMaxDamage() - stack.getDamage();
         return left * 100 < minDurability * stack.getMaxDamage();
+    }
+
+    /** Durability left in percent, rounded down. */
+    public static int durability(ItemStack stack) {
+        if (!stack.isDamageable()) return 100;
+        return (stack.getMaxDamage() - stack.getDamage()) * 100 / stack.getMaxDamage();
     }
 
     private static int level(ItemStack stack, RegistryKey<Enchantment> enchantment) {

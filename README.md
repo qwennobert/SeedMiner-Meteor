@@ -51,54 +51,66 @@ The module page also shows the status and the seed in use, plus the buttons *Res
 **Eating:** Baritone doesn't eat. Use Meteor's Auto Eat: while you eat, the module pauses (no breaking, no tool
 switching) and continues afterwards.
 
+**Pickaxe:** no tool is ever used below `min-durability` (default 5 %), so it never breaks. With a Mending pickaxe the
+module repairs it on its own: once it is below `repair-below` (20 %), ores nearby that give experience (nether quartz;
+coal, lapis, redstone, diamond, emerald) are mined first, with that pickaxe in hand, until it is back at `repair-until`
+(60 %). Ancient debris gives no experience, so mining it alone never repairs anything. Without a usable pickaxe the
+module stops, and with `leave-when-no-pickaxe` it also leaves the server.
+
 **Stopping:** disable the module (bind a key to it). Baritone's own `#stop` does not stop the module for good,
 because the module simply gives Baritone the next ore.
 
 ### Settings
 
+The groups you need most, **Targets** and **Safety**, are expanded; all others start collapsed (click a group title
+to expand it). Options that only matter while another one is on are hidden until then.
+
 | Group | Setting | Description |
 |---|---|---|
-| Seed | `seed-source` | `Auto` (manual seed, otherwise SeedMapper), `Manual`, `SeedMapper` |
-| | `manual-seed` | Seed as a number (or text, like in the world creation screen); leave empty to use the seed from SeedMapper |
-| | `large-biomes` | Enable if the world was created with the Large Biomes preset |
 | Targets | `blocks` | Ores: coal, copper, iron, gold, redstone, lapis, diamond, emerald, raw iron/copper blocks, nether gold, quartz, ancient debris |
-| | `ore-veins` | Include large copper/iron ore veins (slower) |
-| | `chunk-radius` | Scan radius in chunks |
 | | `min-y` / `max-y` | Height range |
-| | `follow-player` | Keep scanning new chunks while you move |
-| | `server-anti-xray` | The server may use anti-xray: only blocks that touch air are trusted, hidden blocks can be fake ores (default on) |
+| | `ore-veins` | Include large copper/iron ore veins (slower) |
 | | `mine-seen-ores` | Also mine ores of the selected types that are visible near you, even if the prediction missed them |
+| | `server-anti-xray` | The server may use anti-xray: only blocks that touch air are trusted, hidden blocks can be fake ores (default on) |
 | | `verify` | `Off`, `SkipAir` (default), `Exact` (also drop positions that are not the ore; with `server-anti-xray` only blocks that touch air are checked) |
-| Mining | `auto-mine` | Mine with Baritone, or only highlight |
-| | `max-distance` | Maximum horizontal distance to an ore |
-| | `vertical-cost` | How much height differences count when picking the next ore (1 = plain 3D distance) |
-| | `vein-priority` | How much groups of ores are preferred over single ores (0 = always the nearest ore, 0.5 = a group of 4 may be twice as far away, 1 = least walking per ore) |
-| | `target-timeout` | Skip an ore when you get no closer to it for N seconds |
-| | `path-retries` | Retries when Baritone can't find a path (start again from 0 whenever you got closer) |
-| | `collect-drops` / `collect-radius` / `collect-timeout` | Walk to the drops of mined ores before moving on, so none are left behind |
-| | `configure-baritone` | Sets `allowBreak=true` plus `allow-place` / `allow-parkour`; restored afterwards |
-| | `disable-when-done` | Disable when no ores are left |
+| Safety | `stop-when-full` | Disable when the drops of the selected ores don't fit anymore (no free slot and no stack of them with room left) |
+| | `leave-when-full` | Also leave the server then (Auto Reconnect is turned off) |
+| | `time-limit` / `leave-at-time-limit` | Disable after N minutes (0 = off), optionally leave the server; the time left shows in the HUD |
+| | `min-health` | Disable at low health |
+| | `require-pickaxe` | Disable when there is no usable pickaxe in the hotbar: none at all, or all worn down to `min-durability` |
+| | `leave-when-no-pickaxe` | Also leave the server then |
+| | `pause-near-players` / `player-range` | Pause while other players are nearby |
 | Auto Tool | `auto-tool` | Pick the tool for every block Baritone breaks (tools must be in the hotbar) |
 | | `fortune-only-on-ores` | Fortune pickaxe only on ores, a pickaxe without fortune for everything else |
 | | `fortune-fallback` | Use the fortune pickaxe for other blocks too if there is no other pickaxe (otherwise the module stops) |
-| | `min-durability` | Don't use tools below this durability (percent) |
-| Safety | `min-health` | Disable at low health |
-| | `stop-when-full` | Disable when the drops of the selected ores don't fit anymore (no free slot and no stack of them with room left) |
-| | `leave-when-full` | Also leave the server then (Auto Reconnect is turned off) |
-| | `time-limit` / `leave-at-time-limit` | Disable after N minutes (0 = off), optionally leave the server; the time left shows in the HUD |
-| | `require-pickaxe` | Disable when there is no pickaxe in the hotbar |
-| | `pause-near-players` / `player-range` | Pause while other players are nearby |
-| Anti-Detection | `anti-detection` | Master switch; the options below only show while it is on (the group starts collapsed, click its title to expand it) |
+| | `min-durability` | Never use a tool with less durability left than this (percent), so it never breaks; also with `auto-tool` off |
+| | `repair-with-mending` | Repair a worn Mending pickaxe by mining ores that give experience (see below, default on) |
+| | `repair-below` / `repair-until` | Start repairing below this durability (default 20 %), stop at this one (default 60 %) |
+| Mining | `auto-mine` | Mine with Baritone, or only highlight |
+| | `collect-drops` / `collect-radius` / `collect-timeout` | Walk to the drops of mined ores before moving on, so none are left behind |
+| | `vein-priority` | How much groups of ores are preferred over single ores (0 = always the nearest ore, 0.5 = a group of 4 may be twice as far away, 1 = least walking per ore) |
+| | `vertical-cost` | How much height differences count when picking the next ore (1 = plain 3D distance) |
+| | `max-distance` | Maximum horizontal distance to an ore |
+| | `target-timeout` | Skip an ore when you get no closer to it for N seconds |
+| | `path-retries` | Retries when Baritone can't find a path (start again from 0 whenever you got closer) |
+| | `disable-when-done` | Disable when no ores are left |
+| Anti-Detection | `anti-detection` | Master switch; the options below only show while it is on |
 | | `max-ores-per-minute` | Mine at most this many ores within 60 seconds, then wait (0 = no limit) |
 | | `random-pause` / `pause-min` / `pause-max` | Random pause after each ore (seconds) |
 | | `stone-detours` / `detour-chance` / `detour-distance` | After an ore, mine a random nearby stone block with X % chance |
 | Auto Compress | `auto-compress` | Experimental: when the ore drops don't fit anymore, place a crafting table from the inventory, craft blocks with the recipe book, mine the table again |
 | | `compress-items` | Items crafted into blocks (default diamond) |
 | | `compress-at-free-slots` | 0 = start when the ore drops don't fit anymore (same "full" as `stop-when-full`); above 0 also start when fewer slots than that are empty |
-| | `show-crafting-gui` | Off = silent: the window is really opened and used, just not drawn |
 | | `drop-junk` / `junk-items` | Throw out junk (stone, deepslate, gravel, ...) first so the crafting table fits back in; one stack of building blocks is kept |
+| | `show-crafting-gui` | Off = silent: the window is really opened and used, just not drawn |
 | | `action-delay-min` / `action-delay-max` | Random pause between two actions (ms) |
 | Render | `render`, `render-limit`, `shape-mode`, colors, `tracer` | Highlighting of the predicted ores |
+| Seed | `seed-source` | `Auto` (manual seed, otherwise SeedMapper), `Manual`, `SeedMapper` |
+| | `manual-seed` | Seed as a number (or text, like in the world creation screen); leave empty to use the seed from SeedMapper |
+| | `large-biomes` | Enable if the world was created with the Large Biomes preset |
+| Advanced | `chunk-radius` | Scan radius in chunks |
+| | `follow-player` | Keep scanning new chunks while you move |
+| | `configure-baritone` | Sets `allowBreak=true` plus `allow-place` / `allow-parkour`; restored afterwards |
 
 ### Command
 

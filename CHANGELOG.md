@@ -4,6 +4,43 @@ Every push builds a new version `0.2.0+build.<N>` with its own [release](../../r
 Settings are named as in the Meteor GUI. Defaults only change for settings you never changed yourself:
 Meteor saves changed settings only.
 
+## 0.2.0+build.34 — 2026-10-19
+
+### Added
+- `repair-with-mending` (Auto Tool, default on): repairs a worn Mending pickaxe while mining. Mending repairs
+  from experience, and ancient debris gives none. Once a Mending pickaxe is below `repair-below` (default 20 %),
+  ores within 16 blocks that give experience are mined first, with that pickaxe in hand: nether quartz in the
+  Nether; coal, lapis, redstone, diamond and emerald in the overworld (more experience per ore counts more than
+  a slightly shorter way). Other blocks are mined with that pickaxe too while experience orbs are flying to you,
+  so none are lost. When it is back at `repair-until` (default 60 %), the module goes back to your ores. The
+  status shows e.g. "Repairing pickaxe (15% -> 60%): Mining nether quartz at ...". With `server-anti-xray` only
+  ores you can see are used, ores next to water or lava are skipped, and one Baritone can't reach is given up
+  right away without a message (there are plenty of others). With none nearby, it keeps mining and tries again.
+  Pickaxes with Silk Touch are never used for it, ores mined for experience don't count as mined.
+- Tested on Paper with GrimAC in the Nether, with a Mending netherite pickaxe at 15 % and a second pickaxe:
+  repaired to 60 % in 6.5 minutes (226 nether quartz, all with the Mending pickaxe in hand, no experience went
+  to the experience bar), then back to ancient debris. No lava, no damage, no anticheat alerts.
+- `leave-when-no-pickaxe` (Safety, default off, shown while `require-pickaxe` is on): also leave the server when
+  no usable pickaxe is left.
+
+### Changed
+- Pickaxes never break anymore. `min-durability` (default 5 %) now really holds: before, when every pickaxe was
+  below it, the one in your hand simply kept being used. Now the block is not broken and the module stops,
+  also with `auto-tool` off (then Baritone picks the tool) and for blocks you break yourself while it runs.
+- `require-pickaxe` only counts pickaxes that can still be used: when all of them are worn down to
+  `min-durability`, the module stops ("All pickaxes in your hotbar are worn down to min-durability (5%),
+  stopping.").
+- Tested with a diamond pickaxe at 6 % and no Unbreaking: it stopped at 78 of 1561 durability left (just under
+  5 %), also when enabled again; with `require-pickaxe` off the block was not broken either, and with
+  `leave-when-no-pickaxe` the client left the server and stayed out.
+- Settings tidied up: only **Targets** and **Safety** are expanded, all other groups start collapsed and are
+  sorted by how often you need them (Auto Tool, Mining, Anti-Detection, Auto Compress, Render, Seed). The rarely
+  needed `chunk-radius`, `follow-player`, `configure-baritone`, `allow-place` and `allow-parkour` moved to a new
+  **Advanced** group. Your saved values move along with them (tested: all moved values arrive), and the groups
+  are collapsed once when you update; after that they stay the way you leave them.
+- `min-durability` is always shown now (it also protects with `auto-tool` off).
+- The "only a fortune pickaxe" message now ends with ", stopping." like the other stop messages.
+
 ## 0.2.0+build.33 — 2026-10-15
 
 ### Fixed

@@ -6,7 +6,9 @@ import net.minecraft.block.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntSupplier;
 
 /**
@@ -29,6 +31,13 @@ public enum OreKind {
     ANCIENT_DEBRIS(Cubiomes::ANCIENT_DEBRIS, Items.ANCIENT_DEBRIS, Blocks.ANCIENT_DEBRIS);
 
     private static final OreKind[] VALUES = values();
+    private static final Map<Block, OreKind> BY_BLOCK = new HashMap<>();
+
+    static {
+        for (OreKind kind : VALUES) {
+            for (Block block : kind.blocks) BY_BLOCK.put(block, kind);
+        }
+    }
 
     private final IntSupplier cubiomesId;
     private final Item drop;
@@ -70,15 +79,24 @@ public enum OreKind {
         return this != RAW_COPPER_BLOCK && this != RAW_IRON_BLOCK && this != ANCIENT_DEBRIS;
     }
 
+    /** Average experience from mining it without silk touch (vanilla drops, e.g. nether quartz 2-5). */
+    public double experience() {
+        return switch (this) {
+            case COAL -> 1;
+            case NETHER_GOLD -> 0.5;
+            case REDSTONE -> 3;
+            case LAPIS, NETHER_QUARTZ -> 3.5;
+            case DIAMOND, EMERALD -> 5;
+            default -> 0;
+        };
+    }
+
     public boolean matches(Block block) {
         return blocks.contains(block);
     }
 
     public static OreKind of(Block block) {
-        for (OreKind kind : VALUES) {
-            if (kind.matches(block)) return kind;
-        }
-        return null;
+        return BY_BLOCK.get(block);
     }
 
     public static OreKind ofCubiomes(int id) {

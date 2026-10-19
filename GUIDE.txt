@@ -82,7 +82,7 @@ IMPORTANT - JAVA 23:
  4. WHERE DOES THE SEED COME FROM?
 -------------------------------------------------------------------------------
 
-Setting "seed-source":
+Setting "seed-source" (group [Seed], click its title to expand it):
 
   Auto (default)   If "manual-seed" is filled in, that seed is used.
                    Otherwise SeedMapper is asked.
@@ -106,12 +106,9 @@ Otherwise the predictions are wrong.
  5. ALL SETTINGS
 -------------------------------------------------------------------------------
 
-[Seed]
-  seed-source         Auto / Manual / SeedMapper                 Default: Auto
-  manual-seed         Seed as a number, or text like in the
-                      world creation screen. Empty = seed from
-                      SeedMapper.                                Default: empty
-  large-biomes        World created with Large Biomes?           Default: off
+Only the groups you need most, [Targets] and [Safety], are expanded. All
+others start collapsed: click a group title to expand or collapse it.
+Options that only matter while another one is on stay hidden until then.
 
 [Targets] - what to look for
   blocks              Which ores. Possible: coal, copper, iron, gold,
@@ -119,23 +116,20 @@ Otherwise the predictions are wrong.
                       block, nether gold, nether quartz, ancient debris.
                       Stone and deepslate variants count the same.
                                              Default: diamond, ancient debris
-  ore-veins           Also large copper/iron veins (slower)      Default: off
-  chunk-radius        How many chunks around you are scanned
-                      (0-16)                                     Default: 4
   min-y / max-y       Height range, e.g. -64 to 16 for
                       diamonds                                   Default: -64 / 320
-  follow-player       Keep scanning new chunks while you move    Default: on
+  ore-veins           Also large copper/iron veins (slower)      Default: off
+  mine-seen-ores      Also mine ores of the selected types that
+                      are visible within 5 blocks of you, even if
+                      the prediction missed them. Ores you can
+                      already see next to you are mined first, so
+                      no vein is left half done.                 Default: on
   server-anti-xray    Many servers (e.g. Paper) hide ores with
                       anti-xray: hidden blocks are shown as fake
                       ores or fake stone. With this on, only
                       blocks that touch air are believed, which
                       anti-xray always shows truthfully. Turn it
                       off only on a server without anti-xray.    Default: on
-  mine-seen-ores      Also mine ores of the selected types that
-                      are visible within 5 blocks of you, even if
-                      the prediction missed them. Ores you can
-                      already see next to you are mined first, so
-                      no vein is left half done.                 Default: on
   verify              Off     = take every prediction
                       SkipAir = drop positions that are actually
                                 air (recommended)
@@ -144,48 +138,30 @@ Otherwise the predictions are wrong.
                                 blocks that touch air are checked)
                                                                  Default: SkipAir
 
-[Mining] - how ores are mined
-  auto-mine           Mine with Baritone. Off = highlight only.  Default: on
-  max-distance        Max. horizontal distance to an ore         Default: 96
-  vertical-cost       How much height differences count when
-                      picking the next ore. 1 = plain 3D
-                      distance. Higher = prefer staying on your
-                      level.                                     Default: 1.5
-  vein-priority       How much groups of ores (veins) are
-                      preferred over single ores. Ores at most 2
-                      blocks apart count as one group.
-                      0   = always the nearest ore
-                      0.5 = a group of 4 ores may be twice as
-                            far away as a single ore
-                      1   = the group with the least walking per
-                            ore (a group of 4 may be 4x as far)
-                      Higher = prefer veins even more.           Default: 0.5
-  target-timeout      Skip an ore when you get no closer to it
-                      for this many seconds. A long way that
-                      makes progress is never cut off.           Default: 60
-  path-retries        Retries when Baritone can't find a path.
-                      Start again from 0 whenever you got
-                      closer to the ore.                         Default: 2
-  collect-drops       Walk to the drops of mined ores (diamonds,
-                      raw iron, ...) before moving on, so none
-                      are left behind                            Default: on
-    collect-radius    How far away drops are collected (blocks)  Default: 6
-    collect-timeout   Give up on a drop after this many seconds  Default: 8
-  configure-baritone  Sets Baritone's allowBreak=true (needed!)
-                      and the two options below. Restored when
-                      the module is disabled.                    Default: on
-    allow-place       Baritone may place blocks (bridges,
-                      covering lava)                             Default: on
-    allow-parkour     Baritone may jump over gaps                Default: off
-  disable-when-done   Disable when no ores are left. Otherwise
-                      it waits for new chunks.                   Default: off
-
-  Ores within reach (about 4 blocks) are mined right from where you stand,
-  without Baritone (status "... (in reach)"). If other blocks hide the ore,
-  those are mined first (status "... (uncovering)"), but never the block
-  you stand on, and never a block next to water or lava or under sand or
-  gravel. Ores that touch water or lava are left to Baritone, which has
-  its own safety rules for that. Then Baritone takes over as usual.
+[Safety]
+  stop-when-full      Disable when the drops of the selected ores
+                      don't fit anymore: no free slot and no
+                      stack of them that still has room. Until
+                      then only ores whose drops still fit are
+                      mined (e.g. diamonds while there is a
+                      diamond stack below 64).                   Default: on
+    leave-when-full   Also leave the server then (like Meteor's
+                      Auto Log; Auto Reconnect is turned off so
+                      you don't join again right away)           Default: off
+  time-limit          Disable after this many minutes, counted
+                      from enabling the module. 0 = no limit.
+                      The time left is shown on the module page,
+                      in the HUD and with .seedminer.            Default: 0
+    leave-at-time-limit
+                      Also leave the server when the time is up  Default: off
+  min-health          Disable at this health or lower (0 = off)  Default: 8
+  require-pickaxe     Disable when there is no usable pickaxe in
+                      the hotbar: none at all, or all of them
+                      worn down to min-durability (Auto Tool)    Default: on
+    leave-when-no-pickaxe
+                      Also leave the server then                 Default: off
+  pause-near-players  Pause while other players are nearby       Default: off
+    player-range      Distance for that                          Default: 32
 
 [Auto Tool] - which tool is used
   The module picks the tool for every block Baritone breaks (Baritone's own
@@ -203,37 +179,76 @@ Otherwise the predictions are wrong.
     fortune-fallback  If there is no other pickaxe, use the
                       fortune pickaxe for stone too. Off = the
                       module stops with a message.               Default: off
-  min-durability      Don't use tools with less durability left
-                      (percent), so they don't break.            Default: 5
+  min-durability      Never use a tool with less durability left
+                      (percent), so it never breaks. Also works
+                      with auto-tool off: the block is not
+                      broken and the module stops.               Default: 5
+  repair-with-mending Repair a worn Mending pickaxe on the way
+                      (see below)                                Default: on
+    repair-below      Start repairing below this durability (%)  Default: 20
+    repair-until      Repair up to this durability (%)           Default: 60
 
   Tip: carry a fortune pickaxe AND a normal (e.g. efficiency) pickaxe in the
   hotbar. Turn off Meteor's own "Auto Tool" module while Seed Miner runs.
 
-[Safety]
-  min-health          Disable at this health or lower (0 = off)  Default: 8
-  stop-when-full      Disable when the drops of the selected ores
-                      don't fit anymore: no free slot and no
-                      stack of them that still has room. Until
-                      then only ores whose drops still fit are
-                      mined (e.g. diamonds while there is a
-                      diamond stack below 64).                   Default: on
-    leave-when-full   Also leave the server then (like Meteor's
-                      Auto Log; Auto Reconnect is turned off so
-                      you don't join again right away)           Default: off
-  time-limit          Disable after this many minutes, counted
-                      from enabling the module. 0 = no limit.
-                      The time left is shown on the module page,
-                      in the HUD and with .seedminer.            Default: 0
-    leave-at-time-limit
-                      Also leave the server when the time is up  Default: off
-  require-pickaxe     Disable when there is no pickaxe in the
-                      hotbar                                     Default: on
-  pause-near-players  Pause while other players are nearby       Default: off
-    player-range      Distance for that                          Default: 32
+  Repairing with Mending: Mending repairs from experience, and ancient
+  debris gives none. So once a Mending pickaxe is below repair-below, the
+  module mines ores nearby that give experience first (within 16 blocks:
+  nether quartz in the Nether; coal, lapis, redstone, diamond, emerald in
+  the overworld), with that pickaxe in hand. The status then shows e.g.
+  "Repairing pickaxe (15% -> 60%): Mining nether quartz at ...". Other
+  blocks are mined with that pickaxe too while experience orbs are flying
+  to you, so none are lost. When it is back at repair-until, the module
+  goes back to your ores. With server-anti-xray only ores you can see are
+  used, and ores next to water or lava are skipped. If there are none
+  nearby, it simply keeps mining and tries again. A pickaxe with Silk Touch
+  is never used for this (no experience). What these ores drop (e.g.
+  quartz) is picked up like anything else; with Auto Compress you can craft
+  it into blocks (compress-items).
+
+  Without a usable pickaxe (all worn down to min-durability), the module
+  stops (require-pickaxe), and with leave-when-no-pickaxe it also leaves the
+  server.
+
+[Mining] - how ores are mined
+  auto-mine           Mine with Baritone. Off = highlight only.  Default: on
+  collect-drops       Walk to the drops of mined ores (diamonds,
+                      raw iron, ...) before moving on, so none
+                      are left behind                            Default: on
+    collect-radius    How far away drops are collected (blocks)  Default: 6
+    collect-timeout   Give up on a drop after this many seconds  Default: 8
+  vein-priority       How much groups of ores (veins) are
+                      preferred over single ores. Ores at most 2
+                      blocks apart count as one group.
+                      0   = always the nearest ore
+                      0.5 = a group of 4 ores may be twice as
+                            far away as a single ore
+                      1   = the group with the least walking per
+                            ore (a group of 4 may be 4x as far)
+                      Higher = prefer veins even more.           Default: 0.5
+  vertical-cost       How much height differences count when
+                      picking the next ore. 1 = plain 3D
+                      distance. Higher = prefer staying on your
+                      level.                                     Default: 1.5
+  max-distance        Max. horizontal distance to an ore         Default: 96
+  target-timeout      Skip an ore when you get no closer to it
+                      for this many seconds. A long way that
+                      makes progress is never cut off.           Default: 60
+  path-retries        Retries when Baritone can't find a path.
+                      Start again from 0 whenever you got
+                      closer to the ore.                         Default: 2
+  disable-when-done   Disable when no ores are left. Otherwise
+                      it waits for new chunks.                   Default: off
+
+  Ores within reach (about 4 blocks) are mined right from where you stand,
+  without Baritone (status "... (in reach)"). If other blocks hide the ore,
+  those are mined first (status "... (uncovering)"), but never the block
+  you stand on, and never a block next to water or lava or under sand or
+  gravel. Ores that touch water or lava are left to Baritone, which has
+  its own safety rules for that. Then Baritone takes over as usual.
 
 [Anti-Detection] - mine less conspicuously
-  The group starts collapsed. Click the "Anti-Detection" title to expand or
-  collapse it. The options below the master switch only show while it is on.
+  The options below the master switch only show while it is on.
 
   anti-detection      Master switch                              Default: off
   max-ores-per-minute Mine at most this many ores within 60
@@ -254,7 +269,7 @@ Otherwise the predictions are wrong.
   slightly over the limit.
 
 [Auto Compress] - craft blocks when the inventory is full (experimental)
-  The group starts collapsed. Carry a crafting table in your inventory.
+  Carry a crafting table in your inventory.
   When the ore drops don't fit anymore, the module places the table next to
   you, opens it, crafts e.g. diamonds into diamond blocks with the recipe
   book, closes it, mines the table and picks it up again. Everything is done
@@ -305,6 +320,24 @@ Otherwise the predictions are wrong.
   target-color        Color of the current target                Default: red
   tracer              Line to the current target                 Default: on
 
+[Seed]
+  seed-source         Auto / Manual / SeedMapper                 Default: Auto
+  manual-seed         Seed as a number, or text like in the
+                      world creation screen. Empty = seed from
+                      SeedMapper.                                Default: empty
+  large-biomes        World created with Large Biomes?           Default: off
+
+[Advanced] - rarely needed
+  chunk-radius        How many chunks around you are scanned
+                      (0-16)                                     Default: 4
+  follow-player       Keep scanning new chunks while you move    Default: on
+  configure-baritone  Sets Baritone's allowBreak=true (needed!)
+                      and the two options below. Restored when
+                      the module is disabled.                    Default: on
+    allow-place       Baritone may place blocks (bridges,
+                      covering lava)                             Default: on
+    allow-parkour     Baritone may jump over gaps                Default: off
+
 
 -------------------------------------------------------------------------------
  6. MODULE PAGE, HUD AND COMMANDS
@@ -341,7 +374,10 @@ Chat commands (Meteor's prefix is the dot):
     ore, min-y = -64, max-y = 16.
   - Ancient debris: enable it in the Nether, height e.g. 8 to 22.
     Bring fire resistance!
-  - Bring a good pickaxe (Efficiency, Unbreaking, Mending) and food.
+  - Bring a good pickaxe (Efficiency, Unbreaking, Mending) and food. With
+    Mending the module repairs the pickaxe on its own (mining nether quartz
+    and other ores that give experience), and no pickaxe is ever used
+    below min-durability.
     Baritone does not eat on its own: turn on Meteor's "Auto Eat". While
     you eat, Seed Miner pauses (status "Eating") and continues afterwards.
   - A few cobblestone blocks in the inventory help Baritone cover lava,

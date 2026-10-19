@@ -4,6 +4,11 @@ Every push builds a new version `0.2.0+build.<N>` with its own [release](../../r
 Settings are named as in the Meteor GUI. Defaults only change for settings you never changed yourself:
 Meteor saves changed settings only.
 
+## 0.2.0+build.35 — 2026-10-19
+
+### Changed
+- The repository is now called SeedMiner-Meteor; the links in the mod list and in Meteor point there.
+
 ## 0.2.0+build.34 — 2026-10-19
 
 ### Added

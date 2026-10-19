@@ -8,7 +8,7 @@
     "qwennobert"
   ],
   "contact": {
-    "sources": "https://github.com/qwennobert/SeedCracker-Meteor"
+    "sources": "https://github.com/qwennobert/SeedMiner-Meteor"
   },
   "icon": "assets/seed-miner/icon.png",
   "environment": "client",

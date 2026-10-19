@@ -40,6 +40,6 @@ public class SeedMinerAddon extends MeteorAddon {
 
     @Override
     public GithubRepo getRepo() {
-        return new GithubRepo("qwennobert", "SeedCracker-Meteor");
+        return new GithubRepo("qwennobert", "SeedMiner-Meteor");
     }
 }

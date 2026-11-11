@@ -11,12 +11,12 @@ import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudGroup;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import net.minecraft.item.Items;
+import net.minecraft.world.item.Items;
 import org.slf4j.Logger;
 
 public class SeedMinerAddon extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
-    public static final Category CATEGORY = new Category("Seed Miner", Items.DIAMOND_PICKAXE.getDefaultStack());
+    public static final Category CATEGORY = new Category("Seed Miner", Items.DIAMOND_PICKAXE::getDefaultInstance);
     public static final HudGroup HUD_GROUP = new HudGroup("Seed Miner");
 
     @Override

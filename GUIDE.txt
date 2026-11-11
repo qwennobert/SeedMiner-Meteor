@@ -1,6 +1,6 @@
 ===============================================================================
   SEED MINER - Guide
-  Meteor Client addon for Minecraft 1.21.11
+  Meteor Client addon for Minecraft 26.3
 ===============================================================================
 
 Seed Miner predicts where ores are from the world seed (e.g. diamonds or
@@ -15,20 +15,21 @@ cheating and will get you banned.
  1. WHAT YOU NEED
 -------------------------------------------------------------------------------
 
-Put all of these into the "mods" folder of your Minecraft 1.21.11 instance:
+Put all of these into the "mods" folder of your Minecraft 26.3 instance:
 
-  [x] Fabric Loader 0.18.2 or newer
-  [x] Fabric API (for 1.21.11)
-  [x] Meteor Client 1.21.11
-  [x] SeedMapper 2.21.x                -> https://modrinth.com/mod/seedmapper
-  [x] Baritone, Meteor build 1.21.11   -> https://maven.meteordev.org
+  [x] Fabric Loader 0.19.5 or newer
+  [x] Fabric API (for 26.3)
+  [x] Meteor Client 26.3
+  [x] SeedMapper 2.33.0 or newer       -> https://modrinth.com/mod/seedmapper
+      (a version for 26.3)
+  [x] Baritone, Meteor build 26.3      -> https://maven.meteordev.org
                                           (without Baritone, ores are only
                                            highlighted, not mined)
   [x] seed-miner-<version>.jar         -> this addon (see section 2)
 
-IMPORTANT - JAVA 23:
-  SeedMapper needs Java 23 or newer on 1.21.11. With Java 21 the game will
-  not start.
+IMPORTANT - JAVA 25:
+  Minecraft 26.3, Meteor and SeedMapper need Java 25 or newer. With an older
+  Java the game will not start. Recent launchers bring Java 25 along.
   Install Java e.g. from https://adoptium.net/temurin/releases/ and select it
   for the instance in your launcher:
     - Vanilla launcher: Installations -> Edit -> More options
@@ -406,7 +407,7 @@ Lots of "Invalid"/"Skipped"
      accurate for coal, copper and emerald in particular.
   -> Wrong seed or "large-biomes" set wrong? Then nothing matches. Check the
      seed with /seed.
-  -> Server on a different version than 1.21.11 (e.g. via ViaFabricPlus):
+  -> Server on a different version than 26.3 (e.g. via ViaFabricPlus):
      the prediction won't match.
 
 Ores are only highlighted, not mined

@@ -3,11 +3,11 @@ plugins {
 }
 
 base {
-    archivesName = properties["archives_base_name"] as String
+    archivesName = providers.gradleProperty("archives_base_name").get()
     // Every GitHub Actions build gets its own version (and jar name), e.g. 0.2.0+build.12
     version = libs.versions.mod.version.get() +
         (providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.let { "+build.$it" } ?: "")
-    group = properties["maven_group"] as String
+    group = providers.gradleProperty("maven_group").get()
 }
 
 repositories {
@@ -56,31 +56,39 @@ repositories {
 
 dependencies {
     // Fabric
+    // Minecraft is not obfuscated (since 26.1): no mappings, and mods need no remapping
     minecraft(libs.minecraft)
-    mappings(variantOf(libs.yarn) { classifier("v2") })
-    modImplementation(libs.fabric.loader)
+    implementation(libs.fabric.loader)
 
     // Meteor
-    modImplementation(libs.meteor.client)
+    implementation(libs.meteor.client)
 
     // Required at runtime, installed by the user alongside the addon
-    modCompileOnly(libs.baritone)
-    modCompileOnly(libs.seedmapper) {
+    compileOnly(libs.baritone)
+    compileOnly(libs.seedmapper) {
         isTransitive = false
     }
     // Client command API, used to ask SeedMapper for the seed (SeedMapper depends on Fabric API anyway)
-    modCompileOnly(libs.fabric.api)
+    compileOnly(libs.fabric.api)
 
     // Only for the "Minecraft Client" run configuration, not part of the published mod
-    modLocalRuntime(libs.baritone)
+    localRuntime(libs.baritone)
     localRuntime(libs.nether.pathfinder)
-    modLocalRuntime(libs.seedmapper) {
+    localRuntime(libs.seedmapper) {
         isTransitive = false
     }
-    modLocalRuntime(libs.fabric.api)
-    modLocalRuntime(libs.betterconfig)
-    modLocalRuntime(libs.clientarguments)
-    modLocalRuntime(libs.simplewaypoints)
+    localRuntime(libs.fabric.api)
+    // Not transitive: everything they need is listed here, and simplewaypoints' POM also names
+    // a dev-only login mod (DevAuth) that is not published in any of these repositories
+    localRuntime(libs.betterconfig) {
+        isTransitive = false
+    }
+    localRuntime(libs.clientarguments) {
+        isTransitive = false
+    }
+    localRuntime(libs.simplewaypoints) {
+        isTransitive = false
+    }
 }
 
 java {

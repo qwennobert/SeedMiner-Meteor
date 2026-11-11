@@ -1,7 +1,7 @@
 package com.qwennobert.seedminer.compress;
 
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 /** Items that can be crafted into a block (or ingot) to save inventory space. */
 public enum Compressible {

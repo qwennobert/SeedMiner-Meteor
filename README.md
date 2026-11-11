@@ -1,4 +1,4 @@
-# Seed Miner – Meteor Client addon (Minecraft 1.21.11)
+# Seed Miner – Meteor Client addon (Minecraft 26.3)
 
 Seed Miner predicts where ores are from the world seed and lets Baritone mine them automatically.
 The seed is taken from [SeedMapper](https://github.com/xpple/SeedMapper), or you enter it yourself.
@@ -24,19 +24,19 @@ A detailed step-by-step guide is in [GUIDE.txt](GUIDE.txt), all changes per vers
 
 ## Installation
 
-Put these into your `mods` folder (all for **1.21.11**):
+Put these into your `mods` folder (all for **26.3**):
 
 | Mod | Required | Notes |
 |---|---|---|
-| [Fabric Loader](https://fabricmc.net/use/) ≥ 0.18.2 | yes | |
+| [Fabric Loader](https://fabricmc.net/use/) ≥ 0.19.5 | yes | |
 | [Fabric API](https://modrinth.com/mod/fabric-api) | yes | needed by SeedMapper |
-| [Meteor Client](https://meteorclient.com/) 1.21.11 | yes | |
-| [SeedMapper](https://modrinth.com/mod/seedmapper/versions) **2.21.x** | yes | provides the ore prediction (cubiomes) |
-| [Baritone (Meteor build)](https://maven.meteordev.org/#/snapshots/meteordevelopment/baritone) 1.21.11 | for mining | without Baritone, ores are only highlighted |
+| [Meteor Client](https://meteorclient.com/) 26.3 | yes | |
+| [SeedMapper](https://modrinth.com/mod/seedmapper/versions) **2.33.0 or newer** (for 26.3) | yes | provides the ore prediction (cubiomes) |
+| [Baritone (Meteor build)](https://maven.meteordev.org/#/snapshots/meteordevelopment/baritone) 26.3 | for mining | without Baritone, ores are only highlighted |
 | Seed Miner (`seed-miner-<version>.jar`) | yes | this addon, from the latest [release](../../releases/latest) |
 
-**Java 23 or newer is required**, because SeedMapper needs it on 1.21.11. Set a Java 23+ runtime for the instance in
-your launcher (e.g. [Temurin](https://adoptium.net/temurin/releases/)).
+**Java 25 or newer is required** (Minecraft 26.3, Meteor and SeedMapper need it). Recent launchers bring it along;
+otherwise set a Java 25+ runtime for the instance in your launcher (e.g. [Temurin](https://adoptium.net/temurin/releases/)).
 
 Every build has its own version (e.g. `0.2.0+build.12`). Remove the old Seed Miner jar from `mods` before adding a new one.
 
@@ -127,7 +127,7 @@ to expand it). Options that only matter while another one is on are hidden until
 - The prediction doesn't know whether an ore touches air, so many positions predicted from far away are wrong
   (especially diamonds next to caves, and coal, copper and emerald). In loaded chunks `verify` corrects this.
   Wrong targets are noticed once Baritone gets there and are skipped. They count as *invalid*, not as mined.
-- If the server runs a different version than 1.21.11 (e.g. via ViaFabricPlus), the prediction won't match.
+- If the server runs a different version than 26.3 (e.g. via ViaFabricPlus), the prediction won't match.
 - Baritone mines by pathing: it digs its way to the ore and breaks it as part of the path. To get up to an ore it may
   need blocks to pillar with, so carry some cobblestone. Ores within reach don't need that.
 
@@ -137,5 +137,5 @@ to expand it). Options that only matter while another one is on are hidden until
 ./gradlew build
 ```
 
-The jar ends up in `build/libs/`. Gradle downloads JDK 23 automatically if needed.
+The jar ends up in `build/libs/`. Gradle itself has to run on Java 25 or newer (Fabric Loom requires it).
 `./gradlew runClient` starts a dev client with Meteor, Baritone, SeedMapper and Fabric API.

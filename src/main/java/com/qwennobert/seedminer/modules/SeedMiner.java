@@ -42,41 +42,41 @@ import meteordevelopment.meteorclient.systems.modules.player.AutoEat;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.player.Rotations;
+import meteordevelopment.meteorclient.utils.player.SwingMode;
 import meteordevelopment.meteorclient.utils.render.RenderUtils;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.block.FallingBlock;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ExperienceOrbEntity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.tag.BlockTags;
-import net.minecraft.registry.tag.ItemTags;
-import net.minecraft.network.packet.s2c.common.DisconnectS2CPacket;
-import net.minecraft.text.Text;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.world.RaycastContext;
-import net.minecraft.world.World;
-
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.ClientboundDisconnectPacket;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -682,7 +682,7 @@ public class SeedMiner extends Module {
     private BaritoneControl baritone;
     private ResolvedSeed seed, resolvedSeed;
     private int seedTimer;
-    private RegistryKey<World> dimension;
+    private ResourceKey<Level> dimension;
     private ChunkPos lastScanCenter;
     private boolean paramsDirty = true;
 
@@ -783,7 +783,7 @@ public class SeedMiner extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
-        if (mc.player == null || mc.world == null) return;
+        if (mc.player == null || mc.level == null) return;
 
         if (toolStop != null) {
             String reason = toolStop;
@@ -795,7 +795,7 @@ public class SeedMiner extends Module {
         if (!updateParams()) return;
 
         // Scan chunks around the player
-        ChunkPos center = mc.player.getChunkPos();
+        ChunkPos center = mc.player.chunkPosition();
         if (lastScanCenter == null || (followPlayer.get() && !center.equals(lastScanCenter))) {
             scanner.scanAround(center, chunkRadius.get());
             lastScanCenter = center;
@@ -826,7 +826,7 @@ public class SeedMiner extends Module {
         if (isEating()) {
             if (!wasEating) {
                 wasEating = true;
-                mc.interactionManager.cancelBlockBreaking();
+                mc.gameMode.stopDestroyBlock();
                 if (baritone.isWorking()) {
                     baritone.stop();
                     baritoneStopped = true;
@@ -846,7 +846,7 @@ public class SeedMiner extends Module {
     private boolean isEating() {
         AutoEat autoEat = Modules.get().get(AutoEat.class);
         if (autoEat != null && autoEat.isActive() && autoEat.eating) return true;
-        return mc.player.isUsingItem() && mc.player.getActiveItem().contains(DataComponentTypes.FOOD);
+        return mc.player.isUsingItem() && mc.player.getUseItem().has(DataComponents.FOOD);
     }
 
     /**
@@ -861,8 +861,8 @@ public class SeedMiner extends Module {
             return;
         }
 
-        BlockState state = mc.world.getBlockState(event.blockPos);
-        if (state.isAir() || state.getHardness(mc.world, event.blockPos) == 0) return;
+        BlockState state = mc.level.getBlockState(event.blockPos);
+        if (state.isAir() || state.getDestroySpeed(mc.level, event.blockPos) == 0) return;
 
         if (autoTool.get()) {
             int slot = selectTool(state);
@@ -876,10 +876,10 @@ public class SeedMiner extends Module {
         }
 
         // Whatever is in hand now (picked here, by Baritone or by you) must not break
-        ItemStack held = mc.player.getMainHandStack();
+        ItemStack held = mc.player.getMainHandItem();
         if (ToolSelector.isWorn(held, minToolDurability.get())) {
             event.cancel();
-            toolStop = held.getName().getString() + " is worn down to " + ToolSelector.durability(held) + "% (min-durability " + minToolDurability.get() + "%)";
+            toolStop = held.getHoverName().getString() + " is worn down to " + ToolSelector.durability(held) + "% (min-durability " + minToolDurability.get() + "%)";
         }
     }
 
@@ -928,7 +928,7 @@ public class SeedMiner extends Module {
             return false;
         }
 
-        RegistryKey<World> currentDimension = mc.world.getRegistryKey();
+        ResourceKey<Level> currentDimension = mc.level.dimension();
         if (!resolved.equals(seed) || currentDimension != dimension) {
             if (seed == null || resolved.seed() != seed.seed()) info("Using seed (highlight)%d(default) from %s.", resolved.seed(), resolved.origin());
             seed = resolved;
@@ -940,8 +940,8 @@ public class SeedMiner extends Module {
             paramsDirty = false;
 
             int cubiomesDimension;
-            if (dimension == World.NETHER) cubiomesDimension = Cubiomes.DIM_NETHER();
-            else if (dimension == World.END) cubiomesDimension = Cubiomes.DIM_END();
+            if (dimension == Level.NETHER) cubiomesDimension = Cubiomes.DIM_NETHER();
+            else if (dimension == Level.END) cubiomesDimension = Cubiomes.DIM_END();
             else cubiomesDimension = Cubiomes.DIM_OVERWORLD();
 
             Set<OreKind> kinds = EnumSet.noneOf(OreKind.class);
@@ -980,7 +980,7 @@ public class SeedMiner extends Module {
             PredictedOre ore = it.next();
             if (ore == target || !isLoaded(ore.pos())) continue;
 
-            BlockState state = mc.world.getBlockState(ore.pos());
+            BlockState state = mc.level.getBlockState(ore.pos());
             boolean trusted = isTrusted(ore.pos());
             if (ore.kind().matches(state.getBlock())) {
                 if (trusted) seenOre.add(ore.pos());
@@ -1022,14 +1022,14 @@ public class SeedMiner extends Module {
     private void addSeenOres() {
         if (selectedKinds.isEmpty()) return;
 
-        BlockPos center = mc.player.getBlockPos();
-        for (BlockPos pos : BlockPos.iterate(center.add(-SEEN_ORE_RADIUS, -SEEN_ORE_RADIUS, -SEEN_ORE_RADIUS), center.add(SEEN_ORE_RADIUS, SEEN_ORE_RADIUS, SEEN_ORE_RADIUS))) {
+        BlockPos center = mc.player.blockPosition();
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-SEEN_ORE_RADIUS, -SEEN_ORE_RADIUS, -SEEN_ORE_RADIUS), center.offset(SEEN_ORE_RADIUS, SEEN_ORE_RADIUS, SEEN_ORE_RADIUS))) {
             if (pos.getY() < scanMinY || pos.getY() > scanMaxY || ores.containsKey(pos) || finished.contains(pos)) continue;
 
-            OreKind kind = OreKind.of(mc.world.getBlockState(pos).getBlock());
+            OreKind kind = OreKind.of(mc.level.getBlockState(pos).getBlock());
             if (kind == null || !selectedKinds.contains(kind) || !isTrusted(pos)) continue;
 
-            BlockPos immutable = pos.toImmutable();
+            BlockPos immutable = pos.immutable();
             ores.put(immutable, new PredictedOre(immutable, kind));
             seenOre.add(immutable);
         }
@@ -1042,9 +1042,9 @@ public class SeedMiner extends Module {
     private boolean isTrusted(BlockPos pos) {
         if (!serverAntiXray.get()) return true;
 
-        BlockPos.Mutable neighbor = new BlockPos.Mutable();
+        BlockPos.MutableBlockPos neighbor = new BlockPos.MutableBlockPos();
         for (Direction direction : Direction.values()) {
-            if (!mc.world.getBlockState(neighbor.set(pos, direction)).isOpaqueFullCube()) return true;
+            if (!mc.level.getBlockState(neighbor.setWithOffset(pos, direction)).isSolidRender()) return true;
         }
         return false;
     }
@@ -1054,7 +1054,7 @@ public class SeedMiner extends Module {
     }
 
     private boolean isUnbreakable(BlockState state, BlockPos pos) {
-        return state.getHardness(mc.world, pos) < 0;
+        return state.getDestroySpeed(mc.level, pos) < 0;
     }
 
     /** Disables the module and, if wanted, leaves the server the way Meteor's Auto Log does. */
@@ -1066,7 +1066,7 @@ public class SeedMiner extends Module {
         // Otherwise Auto Reconnect would join again right away
         AutoReconnect autoReconnect = Modules.get().get(AutoReconnect.class);
         if (autoReconnect.isActive()) autoReconnect.toggle();
-        mc.player.networkHandler.onDisconnect(new DisconnectS2CPacket(Text.literal("[Seed Miner] " + reason + ".")));
+        mc.player.connection.handleDisconnect(new ClientboundDisconnectPacket(Component.literal("[Seed Miner] " + reason + ".")));
     }
 
     private boolean safetyCheck() {
@@ -1131,13 +1131,13 @@ public class SeedMiner extends Module {
         if (target != null) {
             BlockPos pos = target.pos();
             boolean loaded = isLoaded(pos);
-            BlockState state = loaded ? mc.world.getBlockState(pos) : null;
+            BlockState state = loaded ? mc.level.getBlockState(pos) : null;
 
             boolean trusted = loaded && isTrusted(pos);
             if (trusted && target.kind().matches(state.getBlock())) seenOre.add(pos);
 
             // Getting closer is progress: the timeout and the path retries only count while you get nowhere
-            double distance = mc.player.getEyePos().distanceTo(Vec3d.ofCenter(pos));
+            double distance = mc.player.getEyePosition().distanceTo(Vec3.atCenterOf(pos));
             if (distance < targetBestDistance - 1) {
                 targetBestDistance = distance;
                 targetTicks = 0;
@@ -1159,7 +1159,7 @@ public class SeedMiner extends Module {
                 else invalid++;
                 finishTarget();
             }
-            else if (loaded && mc.player.isOnGround() && !touchesFluid(pos) && ((directHit = findReachableFace(pos)) != null || (directHit = findBlockInTheWay(pos)) != null)) {
+            else if (loaded && mc.player.onGround() && !touchesFluid(pos) && ((directHit = findReachableFace(pos)) != null || (directHit = findBlockInTheWay(pos)) != null)) {
                 // In reach: break it from here, or first the block that hides it. Baritone's goal is to stand inside
                 // the ore, which can be impossible (e.g. ore above your head and no blocks to pillar up with).
                 // Only while standing, in the middle of a jump (pillaring up) the ore is out of reach again a moment later.
@@ -1186,7 +1186,7 @@ public class SeedMiner extends Module {
                     baritone.mine(pos);
                 }
                 // Right after a teleport Baritone finds no way until the chunks around you have arrived, that's no failure
-                else if (!isAreaLoaded(mc.player.getBlockPos())) retryWaitTicks = 0;
+                else if (!isAreaLoaded(mc.player.blockPosition())) retryWaitTicks = 0;
                 // Ask again after a moment (1 s, 2 s, ...)
                 else if (++retryWaitTicks >= 20 * (targetRetries + 1)) {
                     retryWaitTicks = 0;
@@ -1290,11 +1290,11 @@ public class SeedMiner extends Module {
         double best = collectRadius.get() * collectRadius.get();
         ItemEntity found = null;
 
-        for (Entity entity : mc.world.getEntities()) {
+        for (Entity entity : mc.level.entitiesForRendering()) {
             if (!(entity instanceof ItemEntity item) || item.isRemoved() || ignoredDrops.contains(item.getId())) continue;
-            if (!isWantedDrop(item.getStack()) || !hasRoomFor(item.getStack().getItem())) continue;
+            if (!isWantedDrop(item.getItem()) || !hasRoomFor(item.getItem().getItem())) continue;
 
-            double distance = item.squaredDistanceTo(mc.player);
+            double distance = item.distanceToSqr(mc.player);
             if (distance <= best) {
                 best = distance;
                 found = item;
@@ -1305,7 +1305,7 @@ public class SeedMiner extends Module {
             collectItem = found;
             collectTicks = 0;
             collectRetries = 0;
-            baritone.walkTo(found.getBlockPos());
+            baritone.walkTo(found.blockPosition());
         }
     }
 
@@ -1326,10 +1326,10 @@ public class SeedMiner extends Module {
         if (!baritone.isWorking()) {
             // In pickup range (a bit less than the server's, to be sure): just wait, fresh drops can only be picked up
             // after a short delay
-            if (mc.player.getBoundingBox().expand(0.8, 0.4, 0.8).intersects(item.getBoundingBox())) return;
+            if (mc.player.getBoundingBox().inflate(0.8, 0.4, 0.8).intersects(item.getBoundingBox())) return;
 
             // The item moved (fell down) or Baritone gave up, try again
-            if (collectRetries++ < 2) baritone.walkTo(item.getBlockPos());
+            if (collectRetries++ < 2) baritone.walkTo(item.blockPosition());
             else giveUpDrop();
         }
     }
@@ -1342,15 +1342,15 @@ public class SeedMiner extends Module {
 
     /** The item can still be picked up: there is a free slot, or a stack of it that isn't full yet. */
     private boolean hasRoomFor(Item item) {
-        PlayerInventory inventory = mc.player.getInventory();
-        if (inventory.getEmptySlot() != -1) return true;
+        Inventory inventory = mc.player.getInventory();
+        if (inventory.getFreeSlot() != -1) return true;
 
-        for (int i = 0; i < PlayerInventory.MAIN_SIZE; i++) {
-            ItemStack stack = inventory.getStack(i);
-            if (stack.isOf(item) && stack.getCount() < stack.getMaxCount()) return true;
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.is(item) && stack.getCount() < stack.getMaxStackSize()) return true;
         }
-        ItemStack offhand = mc.player.getOffHandStack();
-        return offhand.isOf(item) && offhand.getCount() < offhand.getMaxCount();
+        ItemStack offhand = mc.player.getOffhandItem();
+        return offhand.is(item) && offhand.getCount() < offhand.getMaxStackSize();
     }
 
     private Compressor.Options compressOptions() {
@@ -1359,8 +1359,8 @@ public class SeedMiner extends Module {
 
     private int freeSlots() {
         int free = 0;
-        for (int i = 0; i < PlayerInventory.MAIN_SIZE; i++) {
-            if (mc.player.getInventory().getStack(i).isEmpty()) free++;
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+            if (mc.player.getInventory().getItem(i).isEmpty()) free++;
         }
         return free;
     }
@@ -1412,15 +1412,15 @@ public class SeedMiner extends Module {
 
     /** Picks a random stone block near the player and lets Baritone mine it. */
     private boolean startDetour() {
-        BlockPos base = mc.player.getBlockPos();
+        BlockPos base = mc.player.blockPosition();
         int d = detourDistance.get();
 
         for (int i = 0; i < 30; i++) {
-            BlockPos pos = base.add(random.nextInt(2 * d + 1) - d, random.nextInt(3) - 1, random.nextInt(2 * d + 1) - d);
-            if (pos.equals(base) || pos.equals(base.up()) || !isLoaded(pos) || ores.containsKey(pos)) continue;
+            BlockPos pos = base.offset(random.nextInt(2 * d + 1) - d, random.nextInt(3) - 1, random.nextInt(2 * d + 1) - d);
+            if (pos.equals(base) || pos.equals(base.above()) || !isLoaded(pos) || ores.containsKey(pos)) continue;
 
-            BlockState state = mc.world.getBlockState(pos);
-            if (!state.isIn(BlockTags.BASE_STONE_OVERWORLD) && !state.isIn(BlockTags.BASE_STONE_NETHER)) continue;
+            BlockState state = mc.level.getBlockState(pos);
+            if (!state.is(BlockTags.BASE_STONE_OVERWORLD) && !state.is(BlockTags.BASE_STONE_NETHER)) continue;
 
             detourPos = pos;
             detourTicks = 0;
@@ -1434,7 +1434,7 @@ public class SeedMiner extends Module {
 
     /** Returns true when the detour is over. */
     private boolean updateDetour() {
-        boolean gone = isGone(mc.world.getBlockState(detourPos));
+        boolean gone = isGone(mc.level.getBlockState(detourPos));
 
         // Give Baritone a moment to start, then end the detour once it is idle, the block is gone or it takes too long
         if (gone || ++detourTicks > 20 * 20 || (detourTicks > 5 && !baritone.isWorking())) {
@@ -1499,12 +1499,12 @@ public class SeedMiner extends Module {
         int slot = pickaxeToRepair();
         if (slot != repairSlot) {
             if (slot != -1) {
-                ItemStack pickaxe = mc.player.getInventory().getStack(slot);
-                info("%s is worn down to %d%%, repairing it with Mending: ores nearby that give experience come first.", pickaxe.getName().getString(), ToolSelector.durability(pickaxe));
+                ItemStack pickaxe = mc.player.getInventory().getItem(slot);
+                info("%s is worn down to %d%%, repairing it with Mending: ores nearby that give experience come first.", pickaxe.getHoverName().getString(), ToolSelector.durability(pickaxe));
             }
             else {
-                ItemStack pickaxe = mc.player.getInventory().getStack(repairSlot);
-                if (ToolSelector.durability(pickaxe) >= repairUntil.get()) info("%s is repaired (%d%%).", pickaxe.getName().getString(), ToolSelector.durability(pickaxe));
+                ItemStack pickaxe = mc.player.getInventory().getItem(repairSlot);
+                if (ToolSelector.durability(pickaxe) >= repairUntil.get()) info("%s is repaired (%d%%).", pickaxe.getHoverName().getString(), ToolSelector.durability(pickaxe));
             }
             repairSlot = slot;
             xpOres.clear();
@@ -1525,17 +1525,17 @@ public class SeedMiner extends Module {
     private int pickaxeToRepair() {
         if (!repairWithMending.get() || !autoTool.get()) return -1;
 
-        PlayerInventory inventory = mc.player.getInventory();
-        if (repairSlot != -1 && needsRepair(inventory.getStack(repairSlot), Math.max(repairUntil.get(), repairBelow.get()))) return repairSlot;
+        Inventory inventory = mc.player.getInventory();
+        if (repairSlot != -1 && needsRepair(inventory.getItem(repairSlot), Math.max(repairUntil.get(), repairBelow.get()))) return repairSlot;
         for (int slot = 0; slot < 9; slot++) {
-            if (needsRepair(inventory.getStack(slot), repairBelow.get())) return slot;
+            if (needsRepair(inventory.getItem(slot), repairBelow.get())) return slot;
         }
         return -1;
     }
 
     /** A pickaxe Mending can repair with less durability left than below (percent), but not yet worn down to min-durability. */
     private boolean needsRepair(ItemStack stack, int below) {
-        return stack.isIn(ItemTags.PICKAXES) && ToolSelector.canMend(stack) && ToolSelector.durability(stack) < below
+        return stack.is(ItemTags.PICKAXES) && ToolSelector.canMend(stack) && ToolSelector.durability(stack) < below
             && !ToolSelector.isWorn(stack, minToolDurability.get());
     }
 
@@ -1546,15 +1546,15 @@ public class SeedMiner extends Module {
      */
     private void scanXpOres() {
         xpOres.clear();
-        ItemStack pickaxe = mc.player.getInventory().getStack(repairSlot);
+        ItemStack pickaxe = mc.player.getInventory().getItem(repairSlot);
 
-        BlockPos center = mc.player.getBlockPos();
-        for (BlockPos pos : BlockPos.iterate(center.add(-XP_ORE_RADIUS, -XP_ORE_RADIUS, -XP_ORE_RADIUS), center.add(XP_ORE_RADIUS, XP_ORE_RADIUS, XP_ORE_RADIUS))) {
-            BlockState state = mc.world.getBlockState(pos);
+        BlockPos center = mc.player.blockPosition();
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-XP_ORE_RADIUS, -XP_ORE_RADIUS, -XP_ORE_RADIUS), center.offset(XP_ORE_RADIUS, XP_ORE_RADIUS, XP_ORE_RADIUS))) {
+            BlockState state = mc.level.getBlockState(pos);
             OreKind kind = OreKind.of(state.getBlock());
-            if (kind == null || kind.experience() < 1 || finished.contains(pos) || !pickaxe.isSuitableFor(state) || !isTrusted(pos) || touchesFluid(pos)) continue;
+            if (kind == null || kind.experience() < 1 || finished.contains(pos) || !pickaxe.isCorrectToolForDrops(state) || !isTrusted(pos) || touchesFluid(pos)) continue;
 
-            BlockPos immutable = pos.toImmutable();
+            BlockPos immutable = pos.immutable();
             xpOres.put(immutable, ores.getOrDefault(immutable, new PredictedOre(immutable, kind)));
         }
     }
@@ -1579,11 +1579,11 @@ public class SeedMiner extends Module {
 
     /** Experience orbs fly to you from up to 8 blocks away. */
     private boolean xpOrbsNearby() {
-        return !mc.world.getEntitiesByClass(ExperienceOrbEntity.class, mc.player.getBoundingBox().expand(8), orb -> true).isEmpty();
+        return !mc.level.getEntitiesOfClass(ExperienceOrb.class, mc.player.getBoundingBox().inflate(8), orb -> true).isEmpty();
     }
 
     private String repairInfo() {
-        int durability = ToolSelector.durability(mc.player.getInventory().getStack(repairSlot));
+        int durability = ToolSelector.durability(mc.player.getInventory().getItem(repairSlot));
         return "Repairing pickaxe (" + durability + "% -> " + Math.max(repairUntil.get(), repairBelow.get()) + "%)";
     }
 
@@ -1611,21 +1611,21 @@ public class SeedMiner extends Module {
     /** Rays from the eyes to the center and to the middle of each face of the block, as far as they are in reach. */
     private List<BlockHitResult> raycastsInReach(BlockPos pos) {
         List<BlockHitResult> hits = new ArrayList<>();
-        Vec3d eyes = mc.player.getEyePos();
-        double reach = mc.player.getBlockInteractionRange() - 0.25;
-        Vec3d center = Vec3d.ofCenter(pos);
-        if (eyes.squaredDistanceTo(center) > (reach + 0.9) * (reach + 0.9)) return hits;
+        Vec3 eyes = mc.player.getEyePosition();
+        double reach = mc.player.blockInteractionRange() - 0.25;
+        Vec3 center = Vec3.atCenterOf(pos);
+        if (eyes.distanceToSqr(center) > (reach + 0.9) * (reach + 0.9)) return hits;
 
-        List<Vec3d> points = new ArrayList<>();
+        List<Vec3> points = new ArrayList<>();
         points.add(center);
         for (Direction direction : Direction.values()) {
-            points.add(center.add(direction.getOffsetX() * 0.49, direction.getOffsetY() * 0.49, direction.getOffsetZ() * 0.49));
+            points.add(center.add(direction.getStepX() * 0.49, direction.getStepY() * 0.49, direction.getStepZ() * 0.49));
         }
 
-        for (Vec3d point : points) {
-            if (eyes.squaredDistanceTo(point) > reach * reach) continue;
+        for (Vec3 point : points) {
+            if (eyes.distanceToSqr(point) > reach * reach) continue;
 
-            BlockHitResult hit = mc.world.raycast(new RaycastContext(eyes, point, RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player));
+            BlockHitResult hit = mc.level.clip(new ClipContext(eyes, point, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc.player));
             if (hit.getType() == HitResult.Type.BLOCK) hits.add(hit);
         }
 
@@ -1633,31 +1633,31 @@ public class SeedMiner extends Module {
     }
 
     private boolean isSafeToBreak(BlockPos pos) {
-        BlockState state = mc.world.getBlockState(pos);
-        if (state.isAir() || isUnbreakable(state, pos) || !state.getFluidState().isEmpty() || mc.world.getBlockEntity(pos) != null) return false;
+        BlockState state = mc.level.getBlockState(pos);
+        if (state.isAir() || isUnbreakable(state, pos) || !state.getFluidState().isEmpty() || mc.level.getBlockEntity(pos) != null) return false;
 
         // Not the floor you are standing on
-        Box box = mc.player.getBoundingBox();
-        if (new Box(box.minX, box.minY - 0.5, box.minZ, box.maxX, box.minY, box.maxZ).intersects(new Box(pos))) return false;
+        AABB box = mc.player.getBoundingBox();
+        if (new AABB(box.minX, box.minY - 0.5, box.minZ, box.maxX, box.minY, box.maxZ).intersects(new AABB(pos))) return false;
 
         // No water or lava flowing in, no sand or gravel coming down
-        return !touchesFluid(pos) && !(mc.world.getBlockState(pos.up()).getBlock() instanceof FallingBlock);
+        return !touchesFluid(pos) && !(mc.level.getBlockState(pos.above()).getBlock() instanceof FallingBlock);
     }
 
     private boolean touchesFluid(BlockPos pos) {
         for (Direction direction : Direction.values()) {
-            if (!mc.world.getFluidState(pos.offset(direction)).isEmpty()) return true;
+            if (!mc.level.getFluidState(pos.relative(direction)).isEmpty()) return true;
         }
         return false;
     }
 
     /** Looks at the block and keeps mining it, like holding the attack key. */
     private void breakDirectly(BlockHitResult hit) {
-        mc.player.setYaw((float) Rotations.getYaw(hit.getPos()));
-        mc.player.setPitch((float) Rotations.getPitch(hit.getPos()));
+        mc.player.setYRot((float) Rotations.getYaw(hit.getLocation()));
+        mc.player.setXRot((float) Rotations.getPitch(hit.getLocation()));
 
-        if (mc.interactionManager.updateBlockBreakingProgress(hit.getBlockPos(), hit.getSide())) {
-            mc.player.swingHand(Hand.MAIN_HAND);
+        if (mc.gameMode.continueDestroyBlock(hit.getBlockPos(), hit.getDirection())) {
+            SwingMode.Both.attackSwing(InteractionHand.MAIN_HAND);
         }
     }
 
@@ -1721,7 +1721,7 @@ public class SeedMiner extends Module {
         Map<BlockPos, Integer> sizes = new HashMap<>();
         Deque<BlockPos> queue = new ArrayDeque<>();
         List<BlockPos> group = new ArrayList<>();
-        BlockPos.Mutable neighbour = new BlockPos.Mutable();
+        BlockPos.MutableBlockPos neighbour = new BlockPos.MutableBlockPos();
 
         for (BlockPos start : candidates) {
             if (sizes.containsKey(start)) continue;
@@ -1736,9 +1736,9 @@ public class SeedMiner extends Module {
                 for (int x = -VEIN_GAP; x <= VEIN_GAP; x++) {
                     for (int y = -VEIN_GAP; y <= VEIN_GAP; y++) {
                         for (int z = -VEIN_GAP; z <= VEIN_GAP; z++) {
-                            neighbour.set(pos, x, y, z);
+                            neighbour.setWithOffset(pos, x, y, z);
                             if (candidates.contains(neighbour) && !sizes.containsKey(neighbour)) {
-                                BlockPos next = neighbour.toImmutable();
+                                BlockPos next = neighbour.immutable();
                                 sizes.put(next, 0);
                                 queue.add(next);
                             }
@@ -1779,7 +1779,7 @@ public class SeedMiner extends Module {
     }
 
     private boolean isLoaded(BlockPos pos) {
-        return mc.world.getChunkManager().isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4);
+        return mc.level.getChunkSource().hasChunk(pos.getX() >> 4, pos.getZ() >> 4);
     }
 
     /** The chunk of the position and the ones around it are loaded. */
@@ -1787,7 +1787,7 @@ public class SeedMiner extends Module {
         int cx = pos.getX() >> 4, cz = pos.getZ() >> 4;
         for (int x = -1; x <= 1; x++) {
             for (int z = -1; z <= 1; z++) {
-                if (!mc.world.getChunkManager().isChunkLoaded(cx + x, cz + z)) return false;
+                if (!mc.level.getChunkSource().hasChunk(cx + x, cz + z)) return false;
             }
         }
         return true;
@@ -1796,20 +1796,20 @@ public class SeedMiner extends Module {
     /** A pickaxe in the hotbar or offhand. Usable: one that isn't worn down to min-durability. */
     private boolean hasPickaxe(boolean usable) {
         for (int i = 0; i < 9; i++) {
-            if (isPickaxe(mc.player.getInventory().getStack(i), usable)) return true;
+            if (isPickaxe(mc.player.getInventory().getItem(i), usable)) return true;
         }
-        return isPickaxe(mc.player.getOffHandStack(), usable);
+        return isPickaxe(mc.player.getOffhandItem(), usable);
     }
 
     private boolean isPickaxe(ItemStack stack, boolean usable) {
-        return stack.isIn(ItemTags.PICKAXES) && !(usable && ToolSelector.isWorn(stack, minToolDurability.get()));
+        return stack.is(ItemTags.PICKAXES) && !(usable && ToolSelector.isWorn(stack, minToolDurability.get()));
     }
 
     private boolean isPlayerNearby() {
         double rangeSq = playerRange.get() * playerRange.get();
-        for (PlayerEntity player : mc.world.getPlayers()) {
+        for (Player player : mc.level.players()) {
             if (player == mc.player) continue;
-            if (player.squaredDistanceTo(mc.player) <= rangeSq) return true;
+            if (player.distanceToSqr(mc.player) <= rangeSq) return true;
         }
         return false;
     }
@@ -1825,8 +1825,8 @@ public class SeedMiner extends Module {
 
         renderList.addAll(ores.values());
         if (renderList.size() > renderLimit.get()) {
-            BlockPos playerPos = mc.player.getBlockPos();
-            renderList.sort((a, b) -> Double.compare(a.pos().getSquaredDistance(playerPos), b.pos().getSquaredDistance(playerPos)));
+            BlockPos playerPos = mc.player.blockPosition();
+            renderList.sort((a, b) -> Double.compare(a.pos().distSqr(playerPos), b.pos().distSqr(playerPos)));
             renderList.subList(renderLimit.get(), renderList.size()).clear();
         }
     }
@@ -1855,15 +1855,15 @@ public class SeedMiner extends Module {
     private static final int SETTINGS_LAYOUT = 2;
 
     @Override
-    public NbtCompound toTag() {
-        NbtCompound tag = super.toTag();
+    public CompoundTag toTag() {
+        CompoundTag tag = super.toTag();
         if (tag != null) tag.putInt("layout", SETTINGS_LAYOUT);
         return tag;
     }
 
     @Override
-    public Module fromTag(NbtCompound tag) {
-        if (tag.getInt("layout", 1) < SETTINGS_LAYOUT) migrateLayout(tag);
+    public Module fromTag(CompoundTag tag) {
+        if (tag.getIntOr("layout", 1) < SETTINGS_LAYOUT) migrateLayout(tag);
         return super.fromTag(tag);
     }
 
@@ -1872,29 +1872,29 @@ public class SeedMiner extends Module {
      * saved values are sorted into their new groups before loading. The groups also start collapsed once, except
      * Targets and Safety.
      */
-    private void migrateLayout(NbtCompound tag) {
-        Map<String, NbtList> saved = new HashMap<>();
-        for (NbtElement oldGroup : tag.getCompoundOrEmpty("settings").getListOrEmpty("groups")) {
-            if (!(oldGroup instanceof NbtCompound oldGroupTag)) continue;
-            for (NbtElement setting : oldGroupTag.getListOrEmpty("settings")) {
-                if (!(setting instanceof NbtCompound settingTag)) continue;
-                String name = settingTag.getString("name", "");
+    private void migrateLayout(CompoundTag tag) {
+        Map<String, ListTag> saved = new HashMap<>();
+        for (Tag oldGroup : tag.getCompoundOrEmpty("settings").getListOrEmpty("groups")) {
+            if (!(oldGroup instanceof CompoundTag oldGroupTag)) continue;
+            for (Tag setting : oldGroupTag.getListOrEmpty("settings")) {
+                if (!(setting instanceof CompoundTag settingTag)) continue;
+                String name = settingTag.getStringOr("name", "");
                 for (SettingGroup group : settings) {
-                    if (group.get(name) != null) saved.computeIfAbsent(group.name, n -> new NbtList()).add(settingTag);
+                    if (group.get(name) != null) saved.computeIfAbsent(group.name, n -> new ListTag()).add(settingTag);
                 }
             }
         }
 
-        NbtList groups = new NbtList();
+        ListTag groups = new ListTag();
         for (SettingGroup group : settings) {
-            NbtCompound groupTag = new NbtCompound();
+            CompoundTag groupTag = new CompoundTag();
             groupTag.putString("name", group.name);
             groupTag.putBoolean("sectionExpanded", group == sgTargets || group == sgSafety);
-            groupTag.put("settings", saved.getOrDefault(group.name, new NbtList()));
+            groupTag.put("settings", saved.getOrDefault(group.name, new ListTag()));
             groups.add(groupTag);
         }
 
-        NbtCompound settingsTag = new NbtCompound();
+        CompoundTag settingsTag = new CompoundTag();
         settingsTag.put("groups", groups);
         tag.put("settings", settingsTag);
     }

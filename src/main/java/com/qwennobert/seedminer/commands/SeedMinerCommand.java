@@ -6,7 +6,7 @@ import com.qwennobert.seedminer.modules.SeedMiner;
 import com.qwennobert.seedminer.seed.ResolvedSeed;
 import meteordevelopment.meteorclient.commands.Command;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import net.minecraft.command.CommandSource;
+import net.minecraft.client.multiplayer.ClientSuggestionProvider;
 
 public class SeedMinerCommand extends Command {
     public SeedMinerCommand() {
@@ -14,7 +14,7 @@ public class SeedMinerCommand extends Command {
     }
 
     @Override
-    public void build(LiteralArgumentBuilder<CommandSource> builder) {
+    public void build(LiteralArgumentBuilder<ClientSuggestionProvider> builder) {
         builder.executes(context -> status());
         builder.then(literal("status").executes(context -> status()));
 

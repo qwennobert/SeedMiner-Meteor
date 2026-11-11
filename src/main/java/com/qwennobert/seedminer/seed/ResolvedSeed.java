@@ -3,13 +3,16 @@ package com.qwennobert.seedminer.seed;
 import com.github.cubiomes.Cubiomes;
 import com.qwennobert.seedminer.SeedMinerAddon;
 import dev.xpple.seedmapper.util.SeedIdentifier;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 /**
  * A world seed together with the generator settings and where it came from.
  */
 public record ResolvedSeed(long seed, int version, int generatorFlags, String origin) {
-    public static ResolvedSeed resolve(MinecraftClient mc, SeedSource source, String manualSeed, boolean largeBiomes) {
+    /** The Minecraft version this addon is built for, used when the seed comes without a version. */
+    private static final int DEFAULT_VERSION = Cubiomes.MC_26_3();
+
+    public static ResolvedSeed resolve(Minecraft mc, SeedSource source, String manualSeed, boolean largeBiomes) {
         int flags = largeBiomes ? Cubiomes.LARGE_BIOMES() : 0;
 
         return switch (source) {
@@ -24,15 +27,15 @@ public record ResolvedSeed(long seed, int version, int generatorFlags, String or
 
     private static ResolvedSeed manual(String text, int flags) {
         Long seed = parseSeed(text);
-        return seed == null ? null : new ResolvedSeed(seed, Cubiomes.MC_1_21_11(), flags, "manual seed");
+        return seed == null ? null : new ResolvedSeed(seed, DEFAULT_VERSION, flags, "manual seed");
     }
 
-    private static ResolvedSeed seedMapper(MinecraftClient mc, int flags) {
+    private static ResolvedSeed seedMapper(Minecraft mc, int flags) {
         SeedMapperSeed.Result result = SeedMapperSeed.get(mc);
         if (result == null) return null;
 
         SeedIdentifier identifier = result.seed();
-        int version = identifier.hasVersion() ? identifier.version() : Cubiomes.MC_1_21_11();
+        int version = identifier.hasVersion() ? identifier.version() : DEFAULT_VERSION;
         return new ResolvedSeed(identifier.seed(), version, flags | identifier.generatorFlags(), result.origin());
     }
 

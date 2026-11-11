@@ -1,40 +1,41 @@
 package com.qwennobert.seedminer.compress;
 
 import com.qwennobert.seedminer.util.BaritoneControl;
+import meteordevelopment.meteorclient.utils.misc.Names;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.player.Rotations;
 import meteordevelopment.meteorclient.utils.player.SlotUtils;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.CraftingScreen;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
-import net.minecraft.client.gui.screen.recipebook.RecipeResultCollection;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.recipe.Ingredient;
-import net.minecraft.recipe.RecipeDisplayEntry;
-import net.minecraft.recipe.display.SlotDisplayContexts;
-import net.minecraft.registry.tag.ItemTags;
-import net.minecraft.screen.CraftingScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.Hand;
-import net.minecraft.util.context.ContextParameterMap;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.RaycastContext;
-
+import meteordevelopment.meteorclient.utils.player.SwingMode;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.util.Mth;
+import net.minecraft.util.context.ContextMap;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.CraftingMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
+import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -65,7 +66,7 @@ public final class Compressor {
     /** Kept when throwing out junk, so Baritone still has blocks to build with. */
     private static final List<Item> BUILDING_BLOCKS = List.of(Items.COBBLESTONE, Items.NETHERRACK, Items.COBBLED_DEEPSLATE, Items.DIRT, Items.STONE, Items.END_STONE);
 
-    private final MinecraftClient mc;
+    private final Minecraft mc;
     private final BaritoneControl baritone;
     private final Consumer<String> info, warning;
     private final Random random = new Random();
@@ -83,7 +84,7 @@ public final class Compressor {
     private boolean tablePlaced;
     private ItemEntity tableDrop;
     private int pickupRetries;
-    private Vec3d throwTarget;
+    private Vec3 throwTarget;
     private int throwsLeft, pickupThrows;
     private boolean swapped;
     /** Crafting tables in the inventory before placing one, to notice when it is back. */
@@ -96,7 +97,7 @@ public final class Compressor {
     /** Set when something went wrong: the table is still mined and picked up, then this is reported. */
     private String failure;
 
-    public Compressor(MinecraftClient mc, BaritoneControl baritone, Consumer<String> info, Consumer<String> warning) {
+    public Compressor(Minecraft mc, BaritoneControl baritone, Consumer<String> info, Consumer<String> warning) {
         this.mc = mc;
         this.baritone = baritone;
         this.info = info;
@@ -118,7 +119,7 @@ public final class Compressor {
      */
     public boolean canStart(Options options) {
         if (System.currentTimeMillis() < cooldownUntil) return false;
-        if (!mc.player.isOnGround() || mc.player.isTouchingWater() || mc.player.isInLava() || mc.player.isSneaking()) return false;
+        if (!mc.player.onGround() || mc.player.isInWater() || mc.player.isInLava() || mc.player.isShiftKeyDown()) return false;
         if (findTable() < 0 || nextCompressible(options) == null || slotsSaved(options) < 1) return false;
 
         // Junk lying next to you is picked up the moment a slot gets free: then there is no room for the table
@@ -146,7 +147,7 @@ public final class Compressor {
         swapped = false;
         throwsLeft = MAX_THROWS;
         rounds = 0;
-        tableCount = mc.player.getInventory().count(Items.CRAFTING_TABLE);
+        tableCount = mc.player.getInventory().countItem(Items.CRAFTING_TABLE);
 
         // Make room first, otherwise junk lying around takes the slots that crafting frees
         if (options.dropJunk() && freeSlots() < ROOM && (throwTarget = findThrowTarget()) != null) set(State.AIM_THROW);
@@ -159,7 +160,7 @@ public final class Compressor {
 
     /** Stops right away (module disabled): closes the crafting window if it is open. */
     public void abort() {
-        if (state != null && mc.player != null && mc.player.currentScreenHandler instanceof CraftingScreenHandler) mc.player.closeHandledScreen();
+        if (state != null && mc.player != null && mc.player.containerMenu instanceof CraftingMenu) mc.player.closeContainer();
         state = null;
     }
 
@@ -185,7 +186,7 @@ public final class Compressor {
                 return status();
             }
             case AIM_PLACE -> {
-                if (aim(placeHit.getPos())) set(State.PLACE);
+                if (aim(placeHit.getLocation())) set(State.PLACE);
                 return status();
             }
             case AIM_OPEN, AIM_BREAK -> {
@@ -194,7 +195,7 @@ public final class Compressor {
                     if (state == State.AIM_BREAK) set(State.WAIT_DROP);
                     else fail("the crafting table is not in sight");
                 }
-                else if (aim(hit.getPos())) set(state == State.AIM_OPEN ? State.OPEN : State.BREAK);
+                else if (aim(hit.getLocation())) set(state == State.AIM_OPEN ? State.OPEN : State.BREAK);
                 return status();
             }
             case BREAK -> {
@@ -220,8 +221,8 @@ public final class Compressor {
                     break;
                 }
                 // Like Ctrl+Q over the stack in the inventory: it flies off where you look
-                if (options.showGui() && !(mc.currentScreen instanceof InventoryScreen)) mc.setScreen(new InventoryScreen(mc.player));
-                mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, SlotUtils.indexToId(slot), 1, SlotActionType.THROW, mc.player);
+                if (options.showGui() && !(mc.gui.screen() instanceof InventoryScreen)) mc.gui.setScreen(new InventoryScreen(mc.player));
+                mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId, SlotUtils.indexToId(slot), 1, ContainerInput.THROW, mc.player);
                 set(State.SETTLE);
             }
             case SETTLE -> {
@@ -236,12 +237,12 @@ public final class Compressor {
                     break;
                 }
                 swapped = true;
-                if (options.showGui()) mc.setScreen(new InventoryScreen(mc.player));
-                mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, SlotUtils.indexToId(from), freeHotbarSlot(), SlotActionType.SWAP, mc.player);
+                if (options.showGui()) mc.gui.setScreen(new InventoryScreen(mc.player));
+                mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId, SlotUtils.indexToId(from), freeHotbarSlot(), ContainerInput.SWAP, mc.player);
                 set(State.CLOSE_INVENTORY);
             }
             case CLOSE_INVENTORY -> {
-                mc.player.closeHandledScreen();
+                mc.player.closeContainer();
                 afterRoom();
             }
             case SELECT -> {
@@ -256,19 +257,19 @@ public final class Compressor {
                     fail("no free spot for the crafting table");
                     break;
                 }
-                tablePos = placeHit.getBlockPos().offset(placeHit.getSide());
+                tablePos = placeHit.getBlockPos().relative(placeHit.getDirection());
                 set(State.AIM_PLACE);
             }
             case PLACE -> {
-                if (!mc.player.getMainHandStack().isOf(Items.CRAFTING_TABLE)) {
+                if (!mc.player.getMainHandItem().is(Items.CRAFTING_TABLE)) {
                     fail("the crafting table is not in the hand");
                     break;
                 }
-                if (mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, placeHit).isAccepted()) mc.player.swingHand(Hand.MAIN_HAND);
+                if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, placeHit).consumesAction()) SwingMode.Both.interactSwing(InteractionHand.MAIN_HAND);
                 set(State.WAIT_PLACED);
             }
             case WAIT_PLACED -> {
-                if (mc.world.getBlockState(tablePos).isOf(Blocks.CRAFTING_TABLE)) {
+                if (mc.level.getBlockState(tablePos).is(Blocks.CRAFTING_TABLE)) {
                     tablePlaced = true;
                     set(State.AIM_OPEN);
                 }
@@ -279,47 +280,47 @@ public final class Compressor {
                     fail("the crafting table is not in sight");
                     break;
                 }
-                if (mc.interactionManager.interactBlock(mc.player, Hand.MAIN_HAND, hit).isAccepted()) mc.player.swingHand(Hand.MAIN_HAND);
+                if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit).consumesAction()) SwingMode.Both.interactSwing(InteractionHand.MAIN_HAND);
                 set(State.WAIT_OPEN);
             }
             case WAIT_OPEN -> {
-                if (mc.player.currentScreenHandler instanceof CraftingScreenHandler) set(State.CRAFT);
+                if (mc.player.containerMenu instanceof CraftingMenu) set(State.CRAFT);
             }
             case CRAFT -> craft();
             case WAIT_GRID -> {
-                CraftingScreenHandler handler = handler();
+                CraftingMenu handler = handler();
                 if (handler == null) fail("the crafting window was closed");
-                else if (handler.getSlot(CraftingScreenHandler.RESULT_ID).getStack().isOf(current.result)) set(State.TAKE);
+                else if (handler.getSlot(CraftingMenu.RESULT_SLOT).getItem().is(current.result)) set(State.TAKE);
             }
             case TAKE -> {
-                CraftingScreenHandler handler = handler();
+                CraftingMenu handler = handler();
                 if (handler == null) {
                     fail("the crafting window was closed");
                     break;
                 }
-                resultCountBefore = mc.player.getInventory().count(current.result);
+                resultCountBefore = mc.player.getInventory().countItem(current.result);
                 // Shift-click on the result crafts as often as the grid allows
-                mc.interactionManager.clickSlot(handler.syncId, CraftingScreenHandler.RESULT_ID, 0, SlotActionType.QUICK_MOVE, mc.player);
+                mc.gameMode.handleContainerInput(handler.containerId, CraftingMenu.RESULT_SLOT, 0, ContainerInput.QUICK_MOVE, mc.player);
                 set(State.WAIT_TAKEN);
             }
             case WAIT_TAKEN -> {
-                CraftingScreenHandler handler = handler();
+                CraftingMenu handler = handler();
                 if (handler == null) {
                     fail("the crafting window was closed");
                     break;
                 }
-                if (handler.getSlot(CraftingScreenHandler.RESULT_ID).getStack().isEmpty() && gridEmpty(handler)) {
-                    int made = mc.player.getInventory().count(current.result) - resultCountBefore;
+                if (handler.getSlot(CraftingMenu.RESULT_SLOT).getItem().isEmpty() && gridEmpty(handler)) {
+                    int made = mc.player.getInventory().countItem(current.result) - resultCountBefore;
                     if (made > 0) {
                         if (!crafted.isEmpty()) crafted.append(", ");
-                        crafted.append(made).append("x ").append(current.result.getName().getString());
+                        crafted.append(made).append("x ").append(Names.get(current.result));
                     }
                     rounds++;
                     set(State.CRAFT);
                 }
             }
             case CLOSE -> {
-                if (mc.player.currentScreenHandler instanceof CraftingScreenHandler) mc.player.closeHandledScreen();
+                if (mc.player.containerMenu instanceof CraftingMenu) mc.player.closeContainer();
                 set(State.AIM_BREAK);
             }
             case WAIT_DROP -> {
@@ -337,7 +338,7 @@ public final class Compressor {
     // Steps
 
     private void craft() {
-        CraftingScreenHandler handler = handler();
+        CraftingMenu handler = handler();
         if (handler == null) {
             fail("the crafting window was closed");
             return;
@@ -351,12 +352,12 @@ public final class Compressor {
 
         // Like shift-clicking the recipe in the recipe book: the server fills the grid with as many as possible
         recipe = findRecipe(current);
-        mc.interactionManager.clickRecipe(handler.syncId, recipe.id(), true);
+        mc.gameMode.handlePlaceRecipe(handler.containerId, recipe.id(), true);
         set(State.WAIT_GRID);
     }
 
     private void breakTable() {
-        if (!mc.world.getBlockState(tablePos).isOf(Blocks.CRAFTING_TABLE)) {
+        if (!mc.level.getBlockState(tablePos).is(Blocks.CRAFTING_TABLE)) {
             set(State.WAIT_DROP);
             return;
         }
@@ -366,8 +367,8 @@ public final class Compressor {
             fail("the crafting table is not in sight");
             return;
         }
-        aim(hit.getPos());
-        if (mc.interactionManager.updateBlockBreakingProgress(tablePos, hit.getSide())) mc.player.swingHand(Hand.MAIN_HAND);
+        aim(hit.getLocation());
+        if (mc.gameMode.continueDestroyBlock(tablePos, hit.getDirection())) SwingMode.Both.attackSwing(InteractionHand.MAIN_HAND);
     }
 
     private void pickUp() {
@@ -381,16 +382,16 @@ public final class Compressor {
             int slot = junkSlot(options);
             if (slot >= 0) {
                 pickupThrows++;
-                mc.interactionManager.clickSlot(mc.player.playerScreenHandler.syncId, SlotUtils.indexToId(slot), 1, SlotActionType.THROW, mc.player);
-                mc.player.closeHandledScreen();
+                mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId, SlotUtils.indexToId(slot), 1, ContainerInput.THROW, mc.player);
+                mc.player.closeContainer();
                 nextActionAt = System.currentTimeMillis() + 500;
                 return;
             }
         }
 
         if (!baritone.isWorking()) {
-            if (mc.player.getBoundingBox().expand(0.8, 0.4, 0.8).intersects(tableDrop.getBoundingBox())) return;
-            if (pickupRetries++ < 3) baritone.walkTo(tableDrop.getBlockPos());
+            if (mc.player.getBoundingBox().inflate(0.8, 0.4, 0.8).intersects(tableDrop.getBoundingBox())) return;
+            if (pickupRetries++ < 3) baritone.walkTo(tableDrop.blockPosition());
             else fail("could not pick up the crafting table");
         }
     }
@@ -411,10 +412,10 @@ public final class Compressor {
      */
     private void fail(String reason) {
         if (failure == null) failure = reason;
-        if (mc.player.currentScreenHandler instanceof CraftingScreenHandler || mc.currentScreen instanceof InventoryScreen) mc.player.closeHandledScreen();
+        if (mc.player.containerMenu instanceof CraftingMenu || mc.gui.screen() instanceof InventoryScreen) mc.player.closeContainer();
 
         boolean cleaningUp = state == State.AIM_BREAK || state == State.BREAK || state == State.WAIT_DROP || state == State.PICKUP;
-        if (tablePlaced && !cleaningUp && mc.world.getBlockState(tablePos).isOf(Blocks.CRAFTING_TABLE)) set(State.AIM_BREAK);
+        if (tablePlaced && !cleaningUp && mc.level.getBlockState(tablePos).is(Blocks.CRAFTING_TABLE)) set(State.AIM_BREAK);
         else finish();
     }
 
@@ -438,7 +439,7 @@ public final class Compressor {
             case AIM_THROW, THROW, SETTLE -> "Compressing: making room";
             case CLOSE_INVENTORY, TO_HOTBAR, SELECT, AIM_PLACE, PLACE, WAIT_PLACED -> "Compressing: placing crafting table";
             case AIM_OPEN, OPEN, WAIT_OPEN -> "Compressing: opening crafting table";
-            case CRAFT, WAIT_GRID, TAKE, WAIT_TAKEN, CLOSE -> "Compressing: crafting" + (current != null ? " " + current.result.getName().getString() : "");
+            case CRAFT, WAIT_GRID, TAKE, WAIT_TAKEN, CLOSE -> "Compressing: crafting" + (current != null ? " " + Names.get(current.result) : "");
             case AIM_BREAK, BREAK, WAIT_DROP, PICKUP -> "Compressing: picking up crafting table";
         };
     }
@@ -446,13 +447,13 @@ public final class Compressor {
     // Helpers
 
     /** Turns the head a bit towards the point, like moving the mouse. True once it looks there. */
-    private boolean aim(Vec3d target) {
+    private boolean aim(Vec3 target) {
         float yaw = (float) Rotations.getYaw(target), pitch = (float) Rotations.getPitch(target);
-        float yawDiff = MathHelper.wrapDegrees(yaw - mc.player.getYaw()), pitchDiff = pitch - mc.player.getPitch();
+        float yawDiff = Mth.wrapDegrees(yaw - mc.player.getYRot()), pitchDiff = pitch - mc.player.getXRot();
         float step = 12 + random.nextFloat() * 14;
 
-        mc.player.setYaw(mc.player.getYaw() + MathHelper.clamp(yawDiff, -step, step));
-        mc.player.setPitch(MathHelper.clamp(mc.player.getPitch() + MathHelper.clamp(pitchDiff, -step, step), -90, 90));
+        mc.player.setYRot(mc.player.getYRot() + Mth.clamp(yawDiff, -step, step));
+        mc.player.setXRot(Mth.clamp(mc.player.getXRot() + Mth.clamp(pitchDiff, -step, step), -90, 90));
         return Math.abs(yawDiff) <= step && Math.abs(pitchDiff) <= step;
     }
 
@@ -460,23 +461,23 @@ public final class Compressor {
     private Compressible nextCompressible(Options options) {
         for (Item item : options.items()) {
             Compressible compressible = Compressible.of(item);
-            if (compressible == null || warnedNoRecipe.contains(item) || mc.player.getInventory().count(item) < compressible.count) continue;
+            if (compressible == null || warnedNoRecipe.contains(item) || mc.player.getInventory().countItem(item) < compressible.count) continue;
 
             if (findRecipe(compressible) != null) return compressible;
             if (warnedNoRecipe.add(item)) {
-                warning.accept("Auto compress: the recipe for " + compressible.result.getName().getString() + " is not in your recipe book yet.");
+                warning.accept("Auto compress: the recipe for " + Names.get(compressible.result) + " is not in your recipe book yet.");
             }
         }
         return null;
     }
 
     private RecipeDisplayEntry findRecipe(Compressible compressible) {
-        ContextParameterMap context = SlotDisplayContexts.createParameters(mc.world);
+        ContextMap context = SlotDisplayContext.fromLevel(mc.level);
         ItemStack ingredient = new ItemStack(compressible.item);
 
-        for (RecipeResultCollection collection : mc.player.getRecipeBook().getOrderedResults()) {
-            for (RecipeDisplayEntry entry : collection.getAllRecipes()) {
-                if (!entry.display().result().getFirst(context).isOf(compressible.result)) continue;
+        for (RecipeCollection collection : mc.player.getRecipeBook().getCollections()) {
+            for (RecipeDisplayEntry entry : collection.getRecipes()) {
+                if (!entry.display().result().resolveForFirstStack(context).is(compressible.result)) continue;
 
                 Optional<List<Ingredient>> requirements = entry.craftingRequirements();
                 if (requirements.isEmpty() || requirements.get().size() != compressible.count) continue;
@@ -494,20 +495,20 @@ public final class Compressor {
             if (c == null || warnedNoRecipe.contains(item)) continue;
 
             int count = 0, slots = 0, resultRoom = 0;
-            for (int i = 0; i < PlayerInventory.MAIN_SIZE; i++) {
-                ItemStack stack = mc.player.getInventory().getStack(i);
-                if (stack.isOf(c.item)) {
+            for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+                ItemStack stack = mc.player.getInventory().getItem(i);
+                if (stack.is(c.item)) {
                     count += stack.getCount();
                     slots++;
                 }
-                else if (stack.isOf(c.result)) resultRoom += stack.getMaxCount() - stack.getCount();
+                else if (stack.is(c.result)) resultRoom += stack.getMaxStackSize() - stack.getCount();
             }
 
             int results = count / c.count;
             if (results == 0) continue;
             int rest = count - results * c.count;
-            int restSlots = (rest + c.item.getMaxCount() - 1) / c.item.getMaxCount();
-            int resultSlots = (Math.max(0, results - resultRoom) + c.result.getMaxCount() - 1) / c.result.getMaxCount();
+            int restSlots = (rest + c.item.getDefaultMaxStackSize() - 1) / c.item.getDefaultMaxStackSize();
+            int resultSlots = (Math.max(0, results - resultRoom) + c.result.getDefaultMaxStackSize() - 1) / c.result.getDefaultMaxStackSize();
             saved += slots - restSlots - resultSlots;
         }
         return saved;
@@ -515,8 +516,8 @@ public final class Compressor {
 
     private int freeSlots() {
         int free = 0;
-        for (int i = 0; i < PlayerInventory.MAIN_SIZE; i++) {
-            if (mc.player.getInventory().getStack(i).isEmpty()) free++;
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+            if (mc.player.getInventory().getItem(i).isEmpty()) free++;
         }
         return free;
     }
@@ -524,9 +525,9 @@ public final class Compressor {
     /** The item can be picked up: a free slot, or a stack of it with room. */
     private boolean hasRoomFor(Item item) {
         if (freeSlots() > 0) return true;
-        for (int i = 0; i < PlayerInventory.MAIN_SIZE; i++) {
-            ItemStack stack = mc.player.getInventory().getStack(i);
-            if (stack.isOf(item) && stack.getCount() < stack.getMaxCount()) return true;
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
+            if (stack.is(item) && stack.getCount() < stack.getMaxStackSize()) return true;
         }
         return false;
     }
@@ -536,9 +537,9 @@ public final class Compressor {
         int keep = -1;
         for (Item building : BUILDING_BLOCKS) {
             int best = -1;
-            for (int i = 0; i < PlayerInventory.MAIN_SIZE; i++) {
-                ItemStack stack = mc.player.getInventory().getStack(i);
-                if (stack.isOf(building) && (best < 0 || stack.getCount() > mc.player.getInventory().getStack(best).getCount())) best = i;
+            for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+                ItemStack stack = mc.player.getInventory().getItem(i);
+                if (stack.is(building) && (best < 0 || stack.getCount() > mc.player.getInventory().getItem(best).getCount())) best = i;
             }
             if (best >= 0) {
                 keep = best;
@@ -547,36 +548,36 @@ public final class Compressor {
         }
 
         int slot = -1;
-        for (int i = 0; i < PlayerInventory.MAIN_SIZE; i++) {
-            ItemStack stack = mc.player.getInventory().getStack(i);
+        for (int i = 0; i < Inventory.INVENTORY_SIZE; i++) {
+            ItemStack stack = mc.player.getInventory().getItem(i);
             if (i == keep || stack.isEmpty() || !options.junk().contains(stack.getItem())) continue;
-            if (slot < 0 || stack.getCount() > mc.player.getInventory().getStack(slot).getCount()) slot = i;
+            if (slot < 0 || stack.getCount() > mc.player.getInventory().getItem(slot).getCount()) slot = i;
         }
         return slot;
     }
 
     /** Junk lying close enough to be picked up as soon as a slot is free. */
     private boolean junkInReach(Options options) {
-        Box reach = mc.player.getBoundingBox().expand(2, 1.5, 2);
-        for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof ItemEntity item && options.junk().contains(item.getStack().getItem()) && reach.intersects(item.getBoundingBox())) return true;
+        AABB reach = mc.player.getBoundingBox().inflate(2, 1.5, 2);
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity instanceof ItemEntity item && options.junk().contains(item.getItem().getItem()) && reach.intersects(item.getBoundingBox())) return true;
         }
         return false;
     }
 
     /** A point to throw junk at: the direction with the most free room in front, so it isn't picked up again. */
-    private Vec3d findThrowTarget() {
-        Vec3d eyes = mc.player.getEyePos();
-        Vec3d best = null;
+    private Vec3 findThrowTarget() {
+        Vec3 eyes = mc.player.getEyePosition();
+        Vec3 best = null;
         double bestDistance = 0;
         for (int i = 0; i < 16; i++) {
             double yaw = Math.toRadians(i * 22.5);
-            Vec3d direction = new Vec3d(-Math.sin(yaw), 0, Math.cos(yaw));
-            BlockHitResult hit = raycast(eyes, eyes.add(direction.multiply(6)));
-            double distance = hit.getType() == HitResult.Type.MISS ? 6 : hit.getPos().distanceTo(eyes);
+            Vec3 direction = new Vec3(-Math.sin(yaw), 0, Math.cos(yaw));
+            BlockHitResult hit = raycast(eyes, eyes.add(direction.scale(6)));
+            double distance = hit.getType() == HitResult.Type.MISS ? 6 : hit.getLocation().distanceTo(eyes);
             if (distance > bestDistance) {
                 bestDistance = distance;
-                best = eyes.add(direction.multiply(3)).add(0, 0.3, 0);
+                best = eyes.add(direction.scale(3)).add(0, 0.3, 0);
             }
         }
         return best;
@@ -585,7 +586,7 @@ public final class Compressor {
     /** Inventory index of a crafting table (hotbar first), or -1. */
     private int findTable() {
         for (int i = 0; i < 36; i++) {
-            if (mc.player.getInventory().getStack(i).isOf(Items.CRAFTING_TABLE)) return i;
+            if (mc.player.getInventory().getItem(i).is(Items.CRAFTING_TABLE)) return i;
         }
         return -1;
     }
@@ -594,40 +595,40 @@ public final class Compressor {
     private int freeHotbarSlot() {
         int noTool = -1;
         for (int i = 8; i >= 0; i--) {
-            ItemStack stack = mc.player.getInventory().getStack(i);
+            ItemStack stack = mc.player.getInventory().getItem(i);
             if (stack.isEmpty()) return i;
-            if (noTool < 0 && !stack.isDamageable()) noTool = i;
+            if (noTool < 0 && !stack.isDamageableItem()) noTool = i;
         }
         if (noTool >= 0) return noTool;
         for (int i = 8; i >= 0; i--) {
-            if (!mc.player.getInventory().getStack(i).isIn(ItemTags.PICKAXES)) return i;
+            if (!mc.player.getInventory().getItem(i).is(ItemTags.PICKAXES)) return i;
         }
         return 8;
     }
 
     /** Top of a solid block next to you, free above, visible and in reach. Closest first. */
     private BlockHitResult findPlaceSpot() {
-        Vec3d eyes = mc.player.getEyePos();
-        double reach = mc.player.getBlockInteractionRange() - 0.5;
-        Box player = mc.player.getBoundingBox();
-        BlockPos feet = mc.player.getBlockPos();
+        Vec3 eyes = mc.player.getEyePosition();
+        double reach = mc.player.blockInteractionRange() - 0.5;
+        AABB player = mc.player.getBoundingBox();
+        BlockPos feet = mc.player.blockPosition();
 
         BlockHitResult best = null;
         double bestScore = Double.MAX_VALUE;
-        for (BlockPos pos : BlockPos.iterate(feet.add(-2, -1, -2), feet.add(2, 1, 2))) {
-            BlockState state = mc.world.getBlockState(pos);
-            if (!state.isReplaceable() || !mc.world.getFluidState(pos).isEmpty() || player.intersects(new Box(pos))) continue;
+        for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-2, -1, -2), feet.offset(2, 1, 2))) {
+            BlockState state = mc.level.getBlockState(pos);
+            if (!state.canBeReplaced() || !mc.level.getFluidState(pos).isEmpty() || player.intersects(new AABB(pos))) continue;
             if (touchesFluid(pos)) continue;
 
-            BlockPos support = pos.down();
-            if (!mc.world.getBlockState(support).isSideSolidFullSquare(mc.world, support, Direction.UP)) continue;
+            BlockPos support = pos.below();
+            if (!mc.level.getBlockState(support).isFaceSturdy(mc.level, support, Direction.UP)) continue;
 
             // Aim just inside the block: a ray that ends exactly on the face doesn't hit it
-            Vec3d top = Vec3d.ofCenter(support).add(0, 0.49, 0);
+            Vec3 top = Vec3.atCenterOf(support).add(0, 0.49, 0);
             if (eyes.distanceTo(top) > reach) continue;
 
             BlockHitResult hit = raycast(eyes, top);
-            if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(support) || hit.getSide() != Direction.UP) continue;
+            if (hit.getType() != HitResult.Type.BLOCK || !hit.getBlockPos().equals(support) || hit.getDirection() != Direction.UP) continue;
 
             int dx = pos.getX() - feet.getX(), dy = pos.getY() - feet.getY(), dz = pos.getZ() - feet.getZ();
             double score = dx * dx + dz * dz + dy * dy * 2;
@@ -641,17 +642,17 @@ public final class Compressor {
 
     /** Where a ray from the eyes hits the placed table: its center or the middle of a face. */
     private BlockHitResult tableHit() {
-        if (tablePos == null || !mc.world.getBlockState(tablePos).isOf(Blocks.CRAFTING_TABLE)) return null;
+        if (tablePos == null || !mc.level.getBlockState(tablePos).is(Blocks.CRAFTING_TABLE)) return null;
 
-        Vec3d eyes = mc.player.getEyePos();
-        double reach = mc.player.getBlockInteractionRange() - 0.25;
-        Vec3d center = Vec3d.ofCenter(tablePos);
+        Vec3 eyes = mc.player.getEyePosition();
+        double reach = mc.player.blockInteractionRange() - 0.25;
+        Vec3 center = Vec3.atCenterOf(tablePos);
         if (eyes.distanceTo(center) <= reach) {
             BlockHitResult hit = raycast(eyes, center);
             if (hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(tablePos)) return hit;
         }
         for (Direction direction : Direction.values()) {
-            Vec3d point = center.add(direction.getOffsetX() * 0.45, direction.getOffsetY() * 0.45, direction.getOffsetZ() * 0.45);
+            Vec3 point = center.add(direction.getStepX() * 0.45, direction.getStepY() * 0.45, direction.getStepZ() * 0.45);
             if (eyes.distanceTo(point) > reach) continue;
             BlockHitResult hit = raycast(eyes, point);
             if (hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(tablePos)) return hit;
@@ -659,36 +660,36 @@ public final class Compressor {
         return null;
     }
 
-    private BlockHitResult raycast(Vec3d from, Vec3d to) {
-        return mc.world.raycast(new RaycastContext(from, to, RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, mc.player));
+    private BlockHitResult raycast(Vec3 from, Vec3 to) {
+        return mc.level.clip(new ClipContext(from, to, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc.player));
     }
 
     private boolean touchesFluid(BlockPos pos) {
         for (Direction direction : Direction.values()) {
-            if (!mc.world.getFluidState(pos.offset(direction)).isEmpty()) return true;
+            if (!mc.level.getFluidState(pos.relative(direction)).isEmpty()) return true;
         }
         return false;
     }
 
     private ItemEntity findTableDrop() {
-        for (Entity entity : mc.world.getEntities()) {
-            if (entity instanceof ItemEntity item && !item.isRemoved() && item.getStack().isOf(Items.CRAFTING_TABLE)
-                && item.squaredDistanceTo(Vec3d.ofCenter(tablePos)) < 4 * 4) return item;
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if (entity instanceof ItemEntity item && !item.isRemoved() && item.getItem().is(Items.CRAFTING_TABLE)
+                && item.distanceToSqr(Vec3.atCenterOf(tablePos)) < 4 * 4) return item;
         }
         return null;
     }
 
     private boolean tableBack() {
-        return mc.player.getInventory().count(Items.CRAFTING_TABLE) >= tableCount;
+        return mc.player.getInventory().countItem(Items.CRAFTING_TABLE) >= tableCount;
     }
 
-    private CraftingScreenHandler handler() {
-        return mc.player.currentScreenHandler instanceof CraftingScreenHandler handler ? handler : null;
+    private CraftingMenu handler() {
+        return mc.player.containerMenu instanceof CraftingMenu handler ? handler : null;
     }
 
-    private static boolean gridEmpty(CraftingScreenHandler handler) {
-        for (Slot slot : handler.getInputSlots()) {
-            if (slot.hasStack()) return false;
+    private static boolean gridEmpty(CraftingMenu handler) {
+        for (Slot slot : handler.getInputGridSlots()) {
+            if (slot.hasItem()) return false;
         }
         return true;
     }

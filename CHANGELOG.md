@@ -4,6 +4,20 @@ Every push builds a new version `0.2.0+build.<N>` with its own [release](../../r
 Settings are named as in the Meteor GUI. Defaults only change for settings you never changed yourself:
 Meteor saves changed settings only.
 
+## 0.2.0+build.36 — 2026-11-11
+
+### Changed
+- Now for Minecraft 26.3 (before: 1.21.11). Needed alongside: Fabric Loader 0.19.5 or newer, Fabric API for 26.3,
+  Meteor Client 26.3, SeedMapper 2.33.0 or newer (for 26.3) and Baritone (Meteor build) 26.3. This build no longer
+  runs on 1.21.11; for that, keep build.35.
+- Java 25 or newer is required now (Minecraft 26.3, Meteor and SeedMapper need it).
+- When the seed comes without a Minecraft version (e.g. a seed entered in the settings), the prediction uses the
+  ore generation of 26.3.
+- The prediction simulates every ore type SeedMapper knows, the same as `/sm:highlight block`. That now includes
+  infested stone in mountain biomes, which ores generating after it can't always replace.
+- Building: Minecraft is no longer obfuscated since 26.1, so the code uses Mojang's names and there are no Yarn
+  mappings any more. Gradle 9.8.1 and Fabric Loom 1.18, which need Java 25 to run.
+
 ## 0.2.0+build.35 — 2026-10-19
 
 ### Changed

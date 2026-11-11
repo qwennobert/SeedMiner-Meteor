@@ -2,37 +2,37 @@
 # Base version. CI builds append "+build.<run number>", so every build has its own version.
 mod-version = "0.2.0"
 
-# Java: SeedMapper for 1.21.11 is compiled for Java 23 and uses the Foreign Function & Memory API
-jdk = "23"
+# Java: Minecraft 26.3, Meteor and SeedMapper (Foreign Function & Memory API) need Java 25
+jdk = "25"
 
 # Fabric (https://fabricmc.net/develop)
-minecraft = "1.21.11"
-yarn-mappings = "1.21.11+build.3"
-fabric-loader = "0.18.2"
-fabric-api = "0.141.6+1.21.11"
+# Minecraft is no longer obfuscated since 26.1, so there are no mappings (Yarn) any more:
+# the code uses Mojang's names directly.
+minecraft = "26.3"
+fabric-loader = "0.19.5"
+fabric-api = "0.166.2+26.3"
 
 # Loom (https://github.com/FabricMC/fabric-loom)
-loom = "1.14-SNAPSHOT"
+loom = "1.18-SNAPSHOT"
 
 # Meteor (https://github.com/MeteorDevelopment/meteor-client/)
-meteor = "1.21.11-SNAPSHOT"
+meteor = "26.3-SNAPSHOT"
 
 # Mods
 # Baritone, Meteor fork (https://github.com/MeteorDevelopment/baritone)
-baritone = "1.21.11-SNAPSHOT"
-# SeedMapper (https://github.com/xpple/SeedMapper), last release for 1.21.11
-seedmapper = "2.21.2"
+baritone = "26.3-SNAPSHOT"
+# SeedMapper (https://github.com/xpple/SeedMapper), release for 26.3
+seedmapper = "2.38.0"
 # Libraries that SeedMapper bundles (jar-in-jar), needed separately for the dev run configuration
-betterconfig = "2.5.0"
-clientarguments = "1.11.6"
-simplewaypoints = "1.2.0"
+betterconfig = "2.9.0"
+clientarguments = "1.14.0"
+simplewaypoints = "1.5.1"
 # Library that Baritone bundles (jar-in-jar), needed separately for the dev run configuration
-nether-pathfinder = "1.4.1"
+nether-pathfinder = "1.6"
 
 [libraries]
 # Fabric base
 minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft" }
-yarn = { module = "net.fabricmc:yarn", version.ref = "yarn-mappings" }
 fabric-loader = { module = "net.fabricmc:fabric-loader", version.ref = "fabric-loader" }
 fabric-api = { module = "net.fabricmc.fabric-api:fabric-api", version.ref = "fabric-api" }
 
@@ -48,4 +48,4 @@ simplewaypoints = { module = "dev.xpple:simplewaypoints", version.ref = "simplew
 nether-pathfinder = { module = "dev.babbaj:nether-pathfinder", version.ref = "nether-pathfinder" }
 
 [plugins]
-fabric-loom = { id = "fabric-loom", version.ref = "loom" }
+fabric-loom = { id = "net.fabricmc.fabric-loom", version.ref = "loom" }

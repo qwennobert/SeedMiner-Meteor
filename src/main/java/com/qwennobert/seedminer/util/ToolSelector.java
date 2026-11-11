@@ -1,12 +1,12 @@
 package com.qwennobert.seedminer.util;
 
 import meteordevelopment.meteorclient.utils.Utils;
-import net.minecraft.block.BlockState;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.Enchantments;
-import net.minecraft.entity.player.PlayerInventory;
-import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryKey;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Picks the hotbar slot to break a block with: the highest fortune for ores, and for everything else the fastest
@@ -27,20 +27,20 @@ public final class ToolSelector {
      * @param fortuneFallback    use a fortune tool on other blocks anyway if nothing else can mine them
      * @param minDurability      tools with less durability left (percent) are not used
      */
-    public static int select(PlayerInventory inventory, BlockState state, boolean ore, boolean fortuneOnlyOnOres, boolean fortuneFallback, int minDurability) {
-        boolean toolRequired = state.isToolRequired();
+    public static int select(Inventory inventory, BlockState state, boolean ore, boolean fortuneOnlyOnOres, boolean fortuneFallback, int minDurability) {
+        boolean toolRequired = state.requiresCorrectToolForDrops();
 
         int best = KEEP, reserved = KEEP;
         double bestScore = Double.NEGATIVE_INFINITY, reservedScore = Double.NEGATIVE_INFINITY;
 
         for (int slot = 0; slot < 9; slot++) {
-            ItemStack stack = inventory.getStack(slot);
+            ItemStack stack = inventory.getItem(slot);
             if (isWorn(stack, minDurability)) continue;
-            if (toolRequired && !stack.isSuitableFor(state)) continue;
+            if (toolRequired && !stack.isCorrectToolForDrops(state)) continue;
 
             int fortune = level(stack, Enchantments.FORTUNE);
             int silkTouch = level(stack, Enchantments.SILK_TOUCH);
-            double score = stack.getMiningSpeedMultiplier(state) * 10 + level(stack, Enchantments.EFFICIENCY);
+            double score = stack.getDestroySpeed(state) * 10 + level(stack, Enchantments.EFFICIENCY);
 
             boolean allowed;
             if (ore) {
@@ -74,23 +74,23 @@ public final class ToolSelector {
 
     /** Mending repairs it from the experience of mined ores, silk touch would make them drop none. */
     public static boolean canMend(ItemStack stack) {
-        return stack.isDamageable() && level(stack, Enchantments.MENDING) > 0 && level(stack, Enchantments.SILK_TOUCH) == 0;
+        return stack.isDamageableItem() && level(stack, Enchantments.MENDING) > 0 && level(stack, Enchantments.SILK_TOUCH) == 0;
     }
 
     /** The tool has less durability left than minDurability (percent) and must not be used anymore. */
     public static boolean isWorn(ItemStack stack, int minDurability) {
-        if (!stack.isDamageable() || minDurability <= 0) return false;
-        int left = stack.getMaxDamage() - stack.getDamage();
+        if (!stack.isDamageableItem() || minDurability <= 0) return false;
+        int left = stack.getMaxDamage() - stack.getDamageValue();
         return left * 100 < minDurability * stack.getMaxDamage();
     }
 
     /** Durability left in percent, rounded down. */
     public static int durability(ItemStack stack) {
-        if (!stack.isDamageable()) return 100;
-        return (stack.getMaxDamage() - stack.getDamage()) * 100 / stack.getMaxDamage();
+        if (!stack.isDamageableItem()) return 100;
+        return (stack.getMaxDamage() - stack.getDamageValue()) * 100 / stack.getMaxDamage();
     }
 
-    private static int level(ItemStack stack, RegistryKey<Enchantment> enchantment) {
+    private static int level(ItemStack stack, ResourceKey<Enchantment> enchantment) {
         return Utils.getEnchantmentLevel(stack, enchantment);
     }
 }

@@ -1,9 +1,6 @@
 package com.qwennobert.seedminer.predict;
 
 import com.qwennobert.seedminer.SeedMinerAddon;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -14,6 +11,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
 
 /**
  * Runs ore predictions on a background thread, chunk by chunk, and hands the results back to the client thread.
@@ -67,7 +66,7 @@ public class OreScanner {
         int generation = this.generation;
 
         for (ChunkPos chunk : spiral(center, radius)) {
-            if (!requested.add(chunk.toLong())) continue;
+            if (!requested.add(chunk.pack())) continue;
 
             pending.incrementAndGet();
             executor.execute(() -> {
@@ -113,7 +112,7 @@ public class OreScanner {
         for (OreKind kind : params.ores()) wanted.add(kind.cubiomesId());
 
         List<PredictedOre> ores = new ArrayList<>();
-        predictor.predictChunk(chunk.x, chunk.z, wanted::contains, params.minY(), params.maxY(), params.oreVeins(),
+        predictor.predictChunk(chunk.x(), chunk.z(), wanted::contains, params.minY(), params.maxY(), params.oreVeins(),
             (x, y, z, block) -> ores.add(new PredictedOre(new BlockPos(x, y, z), OreKind.ofCubiomes(block))));
         return ores;
     }
@@ -131,10 +130,10 @@ public class OreScanner {
         chunks.add(center);
         for (int r = 1; r <= radius; r++) {
             for (int i = -r; i < r; i++) {
-                chunks.add(new ChunkPos(center.x + i, center.z - r));
-                chunks.add(new ChunkPos(center.x + r, center.z + i));
-                chunks.add(new ChunkPos(center.x - i, center.z + r));
-                chunks.add(new ChunkPos(center.x - r, center.z - i));
+                chunks.add(new ChunkPos(center.x() + i, center.z() - r));
+                chunks.add(new ChunkPos(center.x() + r, center.z() + i));
+                chunks.add(new ChunkPos(center.x() - i, center.z() + r));
+                chunks.add(new ChunkPos(center.x() - r, center.z() - i));
             }
         }
         return chunks;

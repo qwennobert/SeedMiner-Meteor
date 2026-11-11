@@ -1,15 +1,14 @@
 package com.qwennobert.seedminer.predict;
 
 import com.github.cubiomes.Cubiomes;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.IntSupplier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 
 /**
  * Blocks that can be predicted from the seed, mapped between Minecraft blocks and cubiomes block ids.

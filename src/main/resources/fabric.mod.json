@@ -27,9 +27,9 @@
   },
   "depends": {
     "java": ">=${jdk_version}",
-    "minecraft": ["${mc_version}"],
+    "minecraft": "~${mc_version}",
     "meteor-client": "*",
-    "seedmapper": ">=2.21.0"
+    "seedmapper": ">=2.33.0"
   },
   "recommends": {
     "baritone-meteor": "*"

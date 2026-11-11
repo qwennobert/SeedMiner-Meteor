@@ -6,8 +6,8 @@ import dev.xpple.seedmapper.command.CustomClientCommandSource;
 import dev.xpple.seedmapper.command.arguments.SeedResolutionArgument;
 import dev.xpple.seedmapper.util.SeedIdentifier;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientPacketListener;
 
 /**
  * Asks SeedMapper for the seed of the current world, the same way its commands do. This respects SeedMapper's
@@ -18,12 +18,12 @@ public final class SeedMapperSeed {
     private SeedMapperSeed() {
     }
 
-    public static Result get(MinecraftClient mc) {
-        ClientPlayNetworkHandler handler = mc.getNetworkHandler();
+    public static Result get(Minecraft mc) {
+        ClientPacketListener handler = mc.getConnection();
         if (handler == null) return null;
 
         try {
-            CustomClientCommandSource source = CustomClientCommandSource.of((FabricClientCommandSource) handler.getCommandSource());
+            CustomClientCommandSource source = CustomClientCommandSource.of((FabricClientCommandSource) handler.getSuggestionsProvider());
             Pair<SeedResolutionArgument.SeedResolution.Method, SeedIdentifier> seed = source.getSeed();
             return new Result(seed.getSecond(), describe(seed.getFirst()));
         }
